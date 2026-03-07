@@ -256,6 +256,11 @@ export const BLUR_LAYER_STRENGTHS = [6, 5, 4, 3, 2, 1, 0]; // Blur per layer: de
 export const BLUR_LAYER_ALPHAS = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]; // All 1.0 — alpha is per-sprite for smooth transitions
 export const BLUR_LAYER_QUALITY = 2;               // Blur quality (higher = smoother, slower)
 
+// Parallax: deeper blur layers shift less when panning, creating a 2.5D depth effect
+export const PARALLAX_STRENGTH = 0.3;   // Max offset factor for deepest layer (0 = off). Deepest layer moves at (1-this) of surface speed.
+export const PARALLAX_MAX_OFFSET = 100; // Max world-space parallax offset (px). Caps via tanh so it responds smoothly at any pan distance.
+export const PARALLAX_BOUNDARY_MARGIN = 55; // Extra collision radius (px) at extreme depths (0 or 1) to keep organisms from tank edges
+
 // Depth-based scale: deeper organisms appear smaller (perspective)
 export const DEPTH_SCALE_MIN = 0.78;  // Scale at depth 0 (deepest)
 export const DEPTH_SCALE_MAX = 1.08;  // Scale at depth 1 (shallowest)

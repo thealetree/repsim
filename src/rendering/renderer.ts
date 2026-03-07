@@ -68,6 +68,8 @@ import {
   FOOD_DECAY_TICKS,
   VIRUS_SWELLING_FACTOR,
   VIRUS_DARK_RENDER_COLORS,
+  PARALLAX_STRENGTH,
+  PARALLAX_MAX_OFFSET,
 } from '../constants';
 import { VirusEffect } from '../types';
 import { computeLight } from '../simulation/environment';
@@ -142,6 +144,14 @@ export async function createRenderer(width: number, height: number): Promise<Ren
   let wallsDirty = true;
 
   // ── 7 Blur Layers (fine gradations for smooth transitions) ──
+  // Wrapped in a masked container so parallax-shifted sprites are clipped to the tank shape
+  const blurLayerWrapper = new Container();
+  worldContainer.addChild(blurLayerWrapper);
+
+  const blurMask = new Graphics();
+  blurLayerWrapper.addChild(blurMask);
+  blurLayerWrapper.mask = blurMask;
+
   const blurLayers: BlurLayer[] = [];
 
   for (let i = 0; i < BLUR_LAYER_COUNT; i++) {
@@ -155,7 +165,7 @@ export async function createRenderer(width: number, height: number): Promise<Ren
 
     container.alpha = BLUR_LAYER_ALPHAS[i];
 
-    worldContainer.addChild(container);
+    blurLayerWrapper.addChild(container);
     blurLayers.push({ container, sprites: [], active: 0 });
   }
 
@@ -233,7 +243,7 @@ export async function createRenderer(width: number, height: number): Promise<Ren
 
   // ── Environment Container (between tank cells and blur layers, masked to tank) ──
   const environmentContainer = new Container();
-  worldContainer.addChildAt(environmentContainer, worldContainer.children.indexOf(blurLayers[0].container));
+  worldContainer.addChildAt(environmentContainer, worldContainer.children.indexOf(blurLayerWrapper));
 
   // Mask environment to tank cell shape (redrawn when wallsDirty)
   const envMask = new Graphics();
@@ -654,6 +664,13 @@ export async function createRenderer(width: number, height: number): Promise<Ren
       worldContainer.x = screenWidth / 2 - camera.x * camera.zoom;
       worldContainer.y = screenHeight / 2 - camera.y * camera.zoom;
 
+      // ── Parallax offset values (applied per-organism in the render loop) ──
+      // Uses root segment depth so all segments in an organism shift together.
+      // tanh caps the offset smoothly so it never exceeds PARALLAX_MAX_OFFSET,
+      // regardless of how far the camera pans in a huge tank.
+      const parallaxCamX = PARALLAX_MAX_OFFSET * Math.tanh(camera.x * PARALLAX_STRENGTH / PARALLAX_MAX_OFFSET);
+      const parallaxCamY = PARALLAX_MAX_OFFSET * Math.tanh(camera.y * PARALLAX_STRENGTH / PARALLAX_MAX_OFFSET);
+
       // ── Redraw tank cells if dirty ──
       if (wallsDirty) {
         const gs = TANK_GRID_SPACING;
@@ -715,6 +732,18 @@ export async function createRenderer(width: number, height: number): Promise<Ren
         }
         if (world.tankCells.size > 0) {
           envMask.fill({ color: 0xffffff });
+        }
+
+        // ── Blur layer mask (clips parallax-shifted sprites to tank shape) ──
+        blurMask.clear();
+        for (const key of world.tankCells) {
+          const [colStr, rowStr] = key.split(',');
+          const col = Number(colStr);
+          const row = Number(rowStr);
+          blurMask.rect(col * gs, row * gs, gs, gs);
+        }
+        if (world.tankCells.size > 0) {
+          blurMask.fill({ color: 0xffffff });
         }
 
         // ── Dark overlay (cell-based) ──
@@ -797,6 +826,13 @@ export async function createRenderer(width: number, height: number): Promise<Ren
 
         const topology = org.topology;
 
+        // Per-organism parallax: use ROOT segment depth so all segments
+        // in the organism shift together (no tearing from depth variation).
+        const rootDepth = seg.segmentDepth[org.firstSegment];
+        const orgPFactor = 0.5 - rootDepth; // centered on depth 0.5: deep → +, shallow → −
+        const orgParallaxX = parallaxCamX * orgPFactor;
+        const orgParallaxY = parallaxCamY * orgPFactor;
+
         for (let i = 0; i < org.segmentCount; i++) {
           const idx = org.firstSegment + i;
           if (!seg.alive[idx]) continue;
@@ -850,8 +886,8 @@ export async function createRenderer(width: number, height: number): Promise<Ren
           }
 
           sprite.tint = 0xFFFFFF; // Texture handles color — no extra tint needed
-          sprite.x = seg.x[idx];
-          sprite.y = seg.y[idx];
+          sprite.x = seg.x[idx] + orgParallaxX;
+          sprite.y = seg.y[idx] + orgParallaxY;
 
           // ── Compute pill rotation (tree-aware) ──
           let angle = 0;
@@ -971,8 +1007,10 @@ export async function createRenderer(width: number, height: number): Promise<Ren
           } else {
             sprite.texture = normalFoodTex;
           }
-          sprite.x = food.x[fi];
-          sprite.y = food.y[fi];
+          // Parallax offset for food (same depth-based approach as segments)
+          const foodPFactor = 0.5 - food.depth[fi];
+          sprite.x = food.x[fi] + parallaxCamX * foodPFactor;
+          sprite.y = food.y[fi] + parallaxCamY * foodPFactor;
           sprite.rotation = 0;
           // Viral food is slightly larger
           const s = foodScale * (isViral ? 0.7 : 0.5);

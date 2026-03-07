@@ -42,6 +42,7 @@ import {
   BLUR_LAYER_COUNT,
   MAX_SEGMENTS,
   VIRUS_JOINT_WOBBLE,
+  PARALLAX_BOUNDARY_MARGIN,
 } from '../../constants';
 import {
   createSpatialHash,
@@ -450,12 +451,19 @@ export function resolveCollisions(world: World): void {
 export function enforceTankBoundaryCollisions(world: World): void {
   const seg = world.segments;
   const count = world.segmentCount;
-  const r = SEGMENT_RADIUS;
+  const baseR = SEGMENT_RADIUS;
   const gs = TANK_GRID_SPACING;
   const maxSearch = 50; // Max cells to search in cardinal directions
+  // Segments at extreme depths get a larger effective collision radius so
+  // they stay further from tank edges, preventing parallax-shifted sprites
+  // from visually poking outside the tank.
+  const parallaxMargin = PARALLAX_BOUNDARY_MARGIN;
 
   for (let i = 0; i < count; i++) {
     if (!seg.alive[i]) continue;
+    // Depth-based extra margin: |depth - 0.5| * 2 → 0 at mid, 1 at extremes
+    const depthExtremity = Math.abs(seg.segmentDepth[i] - 0.5) * 2;
+    const r = baseR + depthExtremity * parallaxMargin;
 
     const col = Math.floor(seg.x[i] / gs);
     const row = Math.floor(seg.y[i] / gs);
