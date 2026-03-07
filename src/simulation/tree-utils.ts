@@ -1,0 +1,62 @@
+/**
+ * tree-utils.ts — Genome tree topology utilities
+ *
+ * Organisms in Repsim V2 are TREES of connected segments, not linear chains.
+ * Each gene in the genome has a `parent` field pointing to its parent gene's
+ * index (-1 for the root). The genome array is topologically sorted — every
+ * gene's parent index is less than its own index.
+ *
+ * This module provides functions to analyze tree genomes:
+ * - buildGenomeTopology(): Computes children lists, leaf flags, depths — called
+ *   once at spawn time and cached on the Organism for O(1) lookups during
+ *   constraint solving and rendering.
+ * - isValidTreeGenome(): Validates that a genome is a well-formed tree.
+ */
+
+import type { Genome, GenomeTopology } from '../types';
+
+
+/**
+ * Build precomputed topology from a genome's parent references.
+ * O(N) scan, called once per organism at spawn time.
+ *
+ * The topology is cached on the Organism so that constraint systems
+ * and the renderer can traverse the tree structure without recomputing
+ * anything each frame.
+ */
+export function buildGenomeTopology(genome: Genome): GenomeTopology {
+  const n = genome.length;
+  const children: number[][] = Array.from({ length: n }, () => []);
+  const childCount = new Array<number>(n).fill(0);
+  const depth = new Array<number>(n).fill(0);
+
+  for (let i = 1; i < n; i++) {
+    const p = genome[i].parent;
+    children[p].push(i);
+    childCount[p]++;
+    depth[i] = depth[p] + 1;
+  }
+
+  const isLeaf = childCount.map(c => c === 0);
+
+  return { children, childCount, isLeaf, depth };
+}
+
+
+/**
+ * Validate that a genome is a well-formed tree:
+ * - At least one gene
+ * - Exactly one root (gene[0] has parent === -1)
+ * - All parent references point to lower indices (topological sort invariant)
+ * - All parent references are in bounds
+ */
+export function isValidTreeGenome(genome: Genome): boolean {
+  if (genome.length === 0) return false;
+  if (genome[0].parent !== -1) return false;
+
+  for (let i = 1; i < genome.length; i++) {
+    const p = genome[i].parent;
+    if (p < 0 || p >= i) return false; // must point to a lower-index gene
+  }
+  return true;
+}
