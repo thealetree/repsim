@@ -628,13 +628,24 @@ function injectStyles(): void {
       .top-right { display: none !important; }
       .top-divider { display: none; }
 
+      /* Hide tool icons on mobile (moved to dropdown) */
+      #repsim-tool-icons { display: none !important; }
+
       /* Show only Pop and Time stats */
       #repsim-stats { gap: 8px; font-size: 11px; }
       #repsim-stats .stat-item:nth-child(2),
       #repsim-stats .stat-item:nth-child(3) { display: none; }
 
-      /* Compact tool icons */
-      .tool-icon { width: 28px; height: 28px; min-width: 28px; }
+      /* Focus slider when in mobile bar */
+      .mobile-bar-focus {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 1;
+        min-width: 0;
+      }
+      .mobile-bar-focus .top-focus-label { font-size: 9px; white-space: nowrap; }
+      .mobile-bar-focus .top-focus-slider { width: 70px; min-width: 40px; flex-shrink: 1; }
 
       /* Hide desktop panels */
       #repsim-right-panel,

@@ -358,6 +358,20 @@ function injectMobileStyles(): void {
       display: flex;
       gap: 0;
     }
+
+    /* Tool icons visible inside dropdown (override mobile hide) */
+    #repsim-top-dropdown #repsim-tool-icons {
+      display: flex !important;
+      align-items: center;
+      gap: 2px;
+    }
+    #repsim-top-dropdown .tool-icon {
+      width: 36px;
+      height: 36px;
+    }
+    #repsim-top-dropdown .tool-sep {
+      height: 20px;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -412,7 +426,7 @@ export function setupMobileLayout(
 
   // Inject pause + more into top bar (after .top-left, before .top-right)
   const topBar = document.getElementById('repsim-top-bar');
-  const topRight = topBar?.querySelector('.top-right');
+  const topRight = topBar?.querySelector('.top-right') as HTMLElement | null;
   if (topBar && topRight) {
     topBar.insertBefore(moreBtn, topRight);
     topBar.insertBefore(pauseBtn, moreBtn);
@@ -428,8 +442,72 @@ export function setupMobileLayout(
   let topRightNodes: Node[] = [];
   let topRightParent: HTMLElement | null = null;
 
+  // ── Mobile bar swap state: track moved elements ──
+  let barFocusGroup: HTMLElement | null = null;
+  let barThemeToggle: HTMLElement | null = null;
+  let toolIconsDiv: HTMLElement | null = null;
+  let toolIconsOriginalParent: HTMLElement | null = null;
+  let toolIconsNextSibling: Node | null = null;
+
+  /** Move focus slider + theme toggle into visible bar; record tool icons position */
+  function activateMobileBar(): void {
+    if (!topBar || !topRight) return;
+
+    // Move focus group from .top-right to before pauseBtn
+    const focusGroup = topRight.querySelector('.top-focus-group') as HTMLElement | null;
+    if (focusGroup && !barFocusGroup) {
+      barFocusGroup = focusGroup;
+      focusGroup.classList.add('mobile-bar-focus');
+      topBar.insertBefore(focusGroup, pauseBtn);
+    }
+
+    // Move theme toggle from .top-right to before pauseBtn
+    const themeToggle = topRight.querySelector('#repsim-theme-toggle') as HTMLElement | null;
+    if (themeToggle && !barThemeToggle) {
+      barThemeToggle = themeToggle;
+      topBar.insertBefore(themeToggle, pauseBtn);
+    }
+
+    // Record tool icons position for dropdown moves
+    const toolIcons = document.getElementById('repsim-tool-icons');
+    if (toolIcons && !toolIconsDiv) {
+      toolIconsDiv = toolIcons;
+      toolIconsOriginalParent = toolIcons.parentElement as HTMLElement;
+      toolIconsNextSibling = toolIcons.nextSibling;
+    }
+  }
+
+  /** Return focus slider + theme toggle to .top-right for desktop */
+  function deactivateMobileBar(): void {
+    if (!topRight) return;
+
+    // Return focus group as first child of .top-right
+    if (barFocusGroup) {
+      barFocusGroup.classList.remove('mobile-bar-focus');
+      topRight.insertBefore(barFocusGroup, topRight.firstChild);
+      barFocusGroup = null;
+    }
+
+    // Return theme toggle to end of .top-right
+    if (barThemeToggle) {
+      topRight.appendChild(barThemeToggle);
+      barThemeToggle = null;
+    }
+
+    // Tool icons back to .top-left isn't needed here — closeTopDropdown handles it
+    // But if dropdown was never opened, they're still in .top-left (hidden by CSS)
+    toolIconsDiv = null;
+    toolIconsOriginalParent = null;
+    toolIconsNextSibling = null;
+  }
+
   function openTopDropdown(): void {
-    // Move .top-right children into dropdown
+    // Move tool icons into dropdown first
+    if (toolIconsDiv && !topDropdown.contains(toolIconsDiv)) {
+      topDropdown.appendChild(toolIconsDiv);
+    }
+
+    // Move remaining .top-right children (speed, flush/new) into dropdown
     const tr = document.querySelector('#repsim-top-bar .top-right') as HTMLElement | null;
     if (tr && topRightNodes.length === 0) {
       topRightParent = tr;
@@ -447,12 +525,22 @@ export function setupMobileLayout(
     topDropdown.classList.remove('open');
     moreBtn.classList.remove('active');
     topDropdownOpen = false;
-    // Return nodes to .top-right
+
+    // Return .top-right children (speed, flush/new)
     if (topRightParent && topRightNodes.length > 0) {
       for (const node of topRightNodes) {
         topRightParent.appendChild(node);
       }
       topRightNodes = [];
+    }
+
+    // Return tool icons to .top-left (CSS still hides them on mobile)
+    if (toolIconsDiv && toolIconsOriginalParent) {
+      if (toolIconsNextSibling && toolIconsNextSibling.parentNode === toolIconsOriginalParent) {
+        toolIconsOriginalParent.insertBefore(toolIconsDiv, toolIconsNextSibling);
+      } else {
+        toolIconsOriginalParent.appendChild(toolIconsDiv);
+      }
     }
   }
 
@@ -499,6 +587,11 @@ export function setupMobileLayout(
     }
     syncPauseVisual();
   });
+
+  // ── Activate mobile bar on initial load ──
+  if (isMobile()) {
+    activateMobileBar();
+  }
 
   // Watch speed buttons for changes (also fired from dropdown)
   const speedControls = document.getElementById('repsim-speed-controls');
@@ -649,8 +742,12 @@ export function setupMobileLayout(
       // Crossed to desktop: close everything, return all content
       closeSheet();
       if (topDropdownOpen) closeTopDropdown();
+      deactivateMobileBar();
       // Reset content map so it rebuilds fresh next time
       contentMap = null;
+    } else {
+      // Crossed to mobile: set up mobile bar
+      activateMobileBar();
     }
   });
 }
