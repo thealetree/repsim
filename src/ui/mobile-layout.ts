@@ -179,8 +179,9 @@ function injectMobileStyles(): void {
       pointer-events: auto;
     }
 
-    /* Half-Sheet */
+    /* Half-Sheet — hidden on desktop, flex on mobile */
     #repsim-sheet {
+      display: none;
       position: fixed;
       bottom: 52px;
       left: 0;
@@ -193,13 +194,15 @@ function injectMobileStyles(): void {
       transform: translateY(100%);
       transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
       overflow: hidden;
-      display: flex;
       flex-direction: column;
       font-family: var(--ui-font);
       color: var(--ui-text);
     }
     #repsim-sheet.open {
       transform: translateY(0);
+    }
+    @media (max-width: ${MOBILE_BREAKPOINT - 1}px) {
+      #repsim-sheet { display: flex; }
     }
 
     @supports (padding-bottom: env(safe-area-inset-bottom)) {
