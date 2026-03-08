@@ -22,6 +22,7 @@ import { createTooltipSystem, injectTooltipStyles } from './ui/tooltips';
 import { createChartSystem, injectChartStyles } from './ui/charts';
 import { parseUrlParams, injectSaveShareStyles } from './ui/save-share';
 import { createTutorialSystem, createTutorialButton, autoStartTutorial, injectTutorialStyles } from './ui/tutorial';
+import { createEnvironmentPanel, injectEnvironmentPanelStyles } from './ui/environment-panel';
 import { DEFAULT_CONFIG } from './constants';
 
 /**
@@ -62,6 +63,10 @@ async function main(): Promise<void> {
   // ── 8. Save/Share System ──
   injectSaveShareStyles();
   await parseUrlParams(engine, renderer);
+
+  // ── 8b. Bottom Environment Panel ──
+  injectEnvironmentPanelStyles();
+  createEnvironmentPanel(engine, renderer, events);
 
   // ── 9. Tutorial System ──
   injectTutorialStyles();

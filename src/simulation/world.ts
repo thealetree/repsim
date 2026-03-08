@@ -220,8 +220,13 @@ export function createWorld(config: SimConfig = DEFAULT_CONFIG): World {
     tankCellsDirty: true,
     lightSources: [],
     temperatureSources: [],
+    currentSources: [],
     nextLightSourceId: 1,
     nextTemperatureSourceId: 1,
+    nextCurrentSourceId: 1,
+    dayNightEnabled: false,
+    dayNightPhase: 0.5,         // Start at noon
+    dayNightSpeed: 0.5,         // DAY_NIGHT_DEFAULT_SPEED
     food: createFoodParticles(),
     virusStrains: createVirusStrainPool(),
     isLightTheme: false,

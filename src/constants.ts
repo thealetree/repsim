@@ -348,6 +348,20 @@ export const VISCOSITY_MAX_DAMPING = 0.995;    // Very fluid (hot/low viscosity)
 export const TEMP_METABOLISM_MIN = 0.5;        // Cold slows metabolism to 0.5x
 export const TEMP_METABOLISM_MAX = 1.5;        // Hot speeds up metabolism 1.5x
 
+// Current source defaults and ranges
+export const MAX_CURRENT_SOURCES = 5;
+export const CURRENT_DEFAULT_RADIUS = 300;
+export const CURRENT_MIN_RADIUS = 100;
+export const CURRENT_MAX_RADIUS = 600;
+export const CURRENT_DEFAULT_STRENGTH = 0.5;
+export const CURRENT_RESIZE_SPEED = 15;         // World units per scroll tick
+export const CURRENT_FORCE_SCALE = 1.5;         // Base prevPos shift per tick at max strength
+export const CURRENT_COLOR = 0x22cccc;          // Cyan/teal for rendering
+
+// Day/night cycle defaults
+export const DAY_NIGHT_DEFAULT_SPEED = 0.5;     // Full cycles per sim-minute (1200 ticks)
+export const DAY_NIGHT_MIN_INTENSITY = 0.05;    // Minimum light at midnight (not fully dark)
+
 // Environment rendering
 export const LIGHT_GLOW_COLOR = 0xffffaa;      // Warm yellow glow
 export const TEMP_HOT_COLOR = 0xff4422;        // Red overlay for heat

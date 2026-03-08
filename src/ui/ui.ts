@@ -595,6 +595,10 @@ function buildTopBar(): HTMLElement {
         <button class="tool-icon" data-tool="3" title="Temperature">
           <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 00-3 3v8.26A5 5 0 1017 17a5 5 0 00-2-3.74V5a3 3 0 00-3-3zm0 2a1 1 0 011 1v9.54l.42.26A3 3 0 1111 17a3 3 0 002.42-4.2l.42-.26H13V5a1 1 0 00-1-1z"/></svg>
         </button>
+        <div class="tool-sep"></div>
+        <button class="tool-icon" data-tool="4" title="Current">
+          <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M5 12c0-3.87 3.13-7 7-7s7 3.13 7 7"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M8 12a4 4 0 018 0"/><path fill="currentColor" d="M17 10l3 2-3 2z"/></svg>
+        </button>
       </div>
     </div>
     <div class="top-right">
@@ -1094,8 +1098,9 @@ export function createUI(
   // ── Source selection & properties panel ──
   const sourcePropsEl = document.getElementById('repsim-source-props')!;
 
-  function updateSourcePropsPanel(type: 'light' | 'temperature' | null, id: number | null): void {
-    if (type === null || id === null) {
+  function updateSourcePropsPanel(type: 'light' | 'temperature' | 'current' | null, id: number | null): void {
+    if (type === null || id === null || type === 'current') {
+      // Current sources are handled by the bottom environment panel
       sourcePropsEl.innerHTML = '<span class="env-placeholder">Use Light/Temp tools to place sources</span>';
       return;
     }
@@ -1163,17 +1168,17 @@ export function createUI(
     });
   }
 
-  // Renderer calls this when a source is selected/deselected
+  // Renderer source selection callback — set here initially; the bottom
+  // environment panel (created after createUI) will override this to also
+  // update its own source properties section.
   renderer.onSourceSelected = (type, id) => {
-    events.emit('source:selected', { type: type ?? null, id: id ?? null } as { type: 'light' | 'temperature' | null; id: number | null });
+    events.emit('source:selected', { type: type ?? null, id: id ?? null });
     updateSourcePropsPanel(type, id);
   };
 
   // Update source props panel when source is resized via scroll
-  events.on('source:selected', () => {
-    if (renderer.selectedSourceType && renderer.selectedSourceId !== null) {
-      updateSourcePropsPanel(renderer.selectedSourceType, renderer.selectedSourceId);
-    }
+  events.on('source:selected', (data) => {
+    updateSourcePropsPanel(data.type, data.id);
   });
 
   // ── Attach tooltips to all interactive elements ──

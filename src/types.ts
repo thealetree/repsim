@@ -308,8 +308,15 @@ export interface World {
   // Environment sources (max 5 each)
   lightSources: LightSource[];
   temperatureSources: TemperatureSource[];
+  currentSources: CurrentSource[];
   nextLightSourceId: number;
   nextTemperatureSourceId: number;
+  nextCurrentSourceId: number;
+
+  // Day/night cycle
+  dayNightEnabled: boolean;
+  dayNightPhase: number;      // 0-1 where 0 = midnight, 0.5 = noon
+  dayNightSpeed: number;      // Full cycles per sim-minute (1200 ticks)
 
   // Food particles dropped by dead segments
   food: FoodParticles;
@@ -363,12 +370,31 @@ export interface TemperatureSource {
   intensity: number;  // -1 (cold) to +1 (hot), default 0.5
 }
 
+// ─── Current Sources ─────────────────────────────────────────
+
+export const CurrentType = {
+  Whirlpool: 0,
+  Directional: 1,
+} as const;
+export type CurrentType = typeof CurrentType[keyof typeof CurrentType];
+
+export interface CurrentSource {
+  id: number;
+  x: number;
+  y: number;
+  radius: number;     // Falloff radius in world units (default 300, range 100-600)
+  strength: number;   // 0-1 force multiplier (default 0.5)
+  type: CurrentType;  // Whirlpool (tangential) or Directional (linear)
+  direction: number;  // Radians, only used by Directional (default 0 = rightward)
+}
+
 /** Which tool the user is currently using for canvas interaction */
 export const ToolMode = {
   Select: 0,
   Tank: 1,
   Light: 2,
   Temperature: 3,
+  Current: 4,
 } as const;
 export type ToolMode = typeof ToolMode[keyof typeof ToolMode];
 
@@ -418,6 +444,7 @@ export interface TankPayload {
   tank: [number, number][];          // [col, row] pairs (always included)
   lights?: LightSource[];             // optional
   temps?: TemperatureSource[];        // optional
+  currents?: CurrentSource[];         // optional
   config?: Partial<SimConfig>;        // optional (only non-default values)
   orgs?: OrganismPayload[];           // optional
 }

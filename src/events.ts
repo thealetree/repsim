@@ -33,7 +33,7 @@ export interface EventMap {
   'tool:changed': { mode: number };
 
   // Environment source selection
-  'source:selected': { type: 'light' | 'temperature' | null; id: number | null };
+  'source:selected': { type: 'light' | 'temperature' | 'current' | null; id: number | null };
 
   // Virus events
   'virus:outbreak': { strainId: number; colorAffinity: number };

@@ -77,6 +77,7 @@ function serializeTank(
   engine: SimulationEngine,
   includeLights: boolean,
   includeTemps: boolean,
+  includeCurrs: boolean,
   includeConfig: boolean,
 ): TankPayload {
   const world = engine.world;
@@ -96,6 +97,14 @@ function serializeTank(
 
   if (includeTemps && world.temperatureSources.length > 0) {
     payload.temps = world.temperatureSources.map(s => ({ id: s.id, x: Math.round(s.x), y: Math.round(s.y), radius: s.radius, intensity: s.intensity }));
+  }
+
+  if (includeCurrs && world.currentSources.length > 0) {
+    payload.currents = world.currentSources.map(s => ({
+      id: s.id, x: Math.round(s.x), y: Math.round(s.y),
+      radius: s.radius, strength: s.strength,
+      type: s.type, direction: Math.round(s.direction * 1000) / 1000,
+    }));
   }
 
   if (includeConfig) {
@@ -223,6 +232,15 @@ function applyTankPayload(engine: SimulationEngine, payload: TankPayload): void 
     world.nextTemperatureSourceId = Math.max(0, ...payload.temps.map(s => s.id)) + 1;
   }
 
+  // Apply current sources
+  if (payload.currents) {
+    world.currentSources.length = 0;
+    for (const s of payload.currents) {
+      world.currentSources.push({ ...s });
+    }
+    world.nextCurrentSourceId = Math.max(0, ...payload.currents.map(s => s.id)) + 1;
+  }
+
   // Apply config overrides
   if (payload.config) {
     for (const [key, val] of Object.entries(payload.config)) {
@@ -314,6 +332,7 @@ export function buildSaveShareSection(
     { id: 'share-tank', label: 'Tank Shape', checked: true, disabled: true },
     { id: 'share-lights', label: 'Light Sources', checked: false, disabled: false },
     { id: 'share-temps', label: 'Temperature', checked: false, disabled: false },
+    { id: 'share-currs', label: 'Currents', checked: false, disabled: false },
     { id: 'share-config', label: 'Sim Config', checked: false, disabled: false },
   ];
 
@@ -377,6 +396,7 @@ export function buildSaveShareSection(
       engine,
       checkboxes['share-lights'].checked,
       checkboxes['share-temps'].checked,
+      checkboxes['share-currs'].checked,
       checkboxes['share-config'].checked,
     );
     const urlPromise = generateTankURL(payload);

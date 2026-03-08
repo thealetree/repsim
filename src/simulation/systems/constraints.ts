@@ -49,7 +49,7 @@ import {
   insertIntoSpatialHash,
   querySpatialHash,
 } from '../spatial-hash';
-import { computeDamping } from '../environment';
+import { computeDamping, computeCurrentForce } from '../environment';
 import { _orgDepthLayer } from './behaviors';
 
 const spatialHash = createSpatialHash();
@@ -583,11 +583,35 @@ export function enforceTankBoundaryCollisions(world: World): void {
  * 4. Dish boundary (keep in bounds)
  * 5. Wall collisions (keep out of walled grid cells)
  */
+/**
+ * Apply current source forces to all alive segments.
+ * Injects velocity by shifting prevPos backward (same as yellow thrust).
+ * Called after Verlet integration so force adds to existing velocity.
+ */
+function applyCurrentForces(world: World): void {
+  if (world.currentSources.length === 0) return;
+  const seg = world.segments;
+  const count = world.segmentCount;
+
+  for (let i = 0; i < count; i++) {
+    if (!seg.alive[i]) continue;
+    const { fx, fy } = computeCurrentForce(
+      seg.x[i], seg.y[i], world.currentSources,
+    );
+    if (fx !== 0 || fy !== 0) {
+      seg.prevX[i] -= fx;
+      seg.prevY[i] -= fy;
+    }
+  }
+}
+
+
 export function runConstraints(world: World, config: SimConfig): void {
   // Sync fast numeric tank cell lookup (only rebuilds when dirty)
   syncFastTankCells(world);
 
   integrateVerlet(world, config);
+  applyCurrentForces(world);  // Inject current forces after verlet
 
   for (let iter = 0; iter < CHAIN_CONSTRAINT_ITERATIONS; iter++) {
     enforceChainConstraints(world);

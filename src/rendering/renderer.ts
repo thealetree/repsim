@@ -22,8 +22,8 @@
  */
 
 import { Application, Container, Graphics, Sprite, Texture, BlurFilter, ColorMatrixFilter } from 'pixi.js';
-import type { World, Camera as CameraState, LightSource, TemperatureSource } from '../types';
-import { ToolMode } from '../types';
+import type { World, Camera as CameraState, LightSource, TemperatureSource, CurrentSource } from '../types';
+import { ToolMode, CurrentType } from '../types';
 import { createCamera, zoomCamera, panCamera } from './camera';
 import { createEffects, type RenderableGhost, type RenderablePulse } from './effects';
 import { effectsQueue } from '../simulation/world';
@@ -70,9 +70,16 @@ import {
   VIRUS_DARK_RENDER_COLORS,
   PARALLAX_STRENGTH,
   PARALLAX_MAX_OFFSET,
+  MAX_CURRENT_SOURCES,
+  CURRENT_DEFAULT_RADIUS,
+  CURRENT_DEFAULT_STRENGTH,
+  CURRENT_MIN_RADIUS,
+  CURRENT_MAX_RADIUS,
+  CURRENT_RESIZE_SPEED,
+  CURRENT_COLOR,
 } from '../constants';
 import { VirusEffect } from '../types';
-import { computeLight } from '../simulation/environment';
+import { computeLight, getDayNightMultiplier } from '../simulation/environment';
 
 
 // ─── Types ───────────────────────────────────────────────────
@@ -96,9 +103,9 @@ export interface Renderer {
   selectedOrganismId: number | null;
   onOrganismSelected: ((id: number | null) => void) | null;
   toolMode: ToolMode;
-  selectedSourceType: 'light' | 'temperature' | null;
+  selectedSourceType: 'light' | 'temperature' | 'current' | null;
   selectedSourceId: number | null;
-  onSourceSelected: ((type: 'light' | 'temperature' | null, id: number | null) => void) | null;
+  onSourceSelected: ((type: 'light' | 'temperature' | 'current' | null, id: number | null) => void) | null;
   render(world: World, alpha: number): void;
   destroy(): void;
   getCanvas(): HTMLCanvasElement;
@@ -232,10 +239,10 @@ export async function createRenderer(width: number, height: number): Promise<Ren
 
   // ── Tool mode state ──
   let toolMode: ToolMode = ToolMode.Select;
-  let selectedSourceType: 'light' | 'temperature' | null = null;
+  let selectedSourceType: 'light' | 'temperature' | 'current' | null = null;
   let selectedSourceId: number | null = null;
   let isDraggingSource = false;
-  let onSourceSelected: ((type: 'light' | 'temperature' | null, id: number | null) => void) | null = null;
+  let onSourceSelected: ((type: 'light' | 'temperature' | 'current' | null, id: number | null) => void) | null = null;
 
   // ── Per-segment light cache (recomputed per sim tick) ──
   let segmentLightCache: Float32Array | null = null;
@@ -284,6 +291,13 @@ export async function createRenderer(width: number, height: number): Promise<Ren
     [0.4, 'rgba(40,60,255,0.08)'],
     [1, 'rgba(40,60,255,0)'],
   ]);
+  const currentTexture = createRadialGradientTexture(256, [
+    [0, 'rgba(34,204,204,0.15)'],
+    [0.3, 'rgba(34,204,204,0.08)'],
+    [0.7, 'rgba(34,204,204,0.03)'],
+    [1, 'rgba(34,204,204,0)'],
+  ]);
+  const currentSprites: Sprite[] = [];
 
   // ── Camera Input ──
   const canvas = app.canvas as HTMLCanvasElement;
@@ -367,13 +381,20 @@ export async function createRenderer(width: number, height: number): Promise<Ren
       // Resize selected source radius
       const sources = selectedSourceType === 'light'
         ? currentWorld.lightSources
-        : currentWorld.temperatureSources;
+        : selectedSourceType === 'temperature'
+        ? currentWorld.temperatureSources
+        : currentWorld.currentSources;
       const src = sources.find(s => s.id === selectedSourceId);
       if (src) {
-        const isLight = selectedSourceType === 'light';
-        const speed = isLight ? LIGHT_RESIZE_SPEED : TEMP_RESIZE_SPEED;
-        const minR = isLight ? LIGHT_MIN_RADIUS : TEMP_MIN_RADIUS;
-        const maxR = isLight ? LIGHT_MAX_RADIUS : TEMP_MAX_RADIUS;
+        const speed = selectedSourceType === 'light' ? LIGHT_RESIZE_SPEED
+          : selectedSourceType === 'temperature' ? TEMP_RESIZE_SPEED
+          : CURRENT_RESIZE_SPEED;
+        const minR = selectedSourceType === 'light' ? LIGHT_MIN_RADIUS
+          : selectedSourceType === 'temperature' ? TEMP_MIN_RADIUS
+          : CURRENT_MIN_RADIUS;
+        const maxR = selectedSourceType === 'light' ? LIGHT_MAX_RADIUS
+          : selectedSourceType === 'temperature' ? TEMP_MAX_RADIUS
+          : CURRENT_MAX_RADIUS;
         const delta = e.deltaY > 0 ? -speed : speed;
         src.radius = Math.max(minR, Math.min(maxR, src.radius + delta));
         if (onSourceSelected) onSourceSelected(selectedSourceType, selectedSourceId);
@@ -440,7 +461,7 @@ export async function createRenderer(width: number, height: number): Promise<Ren
     for (const ls of currentWorld.lightSources) {
       const dx = wx - ls.x;
       const dy = wy - ls.y;
-      const hitR = Math.max(30, ls.radius * 0.3);
+      const hitR = Math.max(50, ls.radius * 0.3);
       if (dx * dx + dy * dy < hitR * hitR) {
         selectedSourceType = 'light';
         selectedSourceId = ls.id;
@@ -473,7 +494,7 @@ export async function createRenderer(width: number, height: number): Promise<Ren
     for (const ts of currentWorld.temperatureSources) {
       const dx = wx - ts.x;
       const dy = wy - ts.y;
-      const hitR = Math.max(30, ts.radius * 0.3);
+      const hitR = Math.max(50, ts.radius * 0.3);
       if (dx * dx + dy * dy < hitR * hitR) {
         selectedSourceType = 'temperature';
         selectedSourceId = ts.id;
@@ -497,6 +518,40 @@ export async function createRenderer(width: number, height: number): Promise<Ren
     renderer.selectedSourceType = 'temperature';
     renderer.selectedSourceId = newSource.id;
     if (onSourceSelected) onSourceSelected('temperature', newSource.id);
+  }
+
+  /** Handle current source click — select existing or place new */
+  function handleCurrentClick(wx: number, wy: number): void {
+    if (!currentWorld) return;
+    for (const cs of currentWorld.currentSources) {
+      const dx = wx - cs.x;
+      const dy = wy - cs.y;
+      const hitR = Math.max(50, cs.radius * 0.3);
+      if (dx * dx + dy * dy < hitR * hitR) {
+        selectedSourceType = 'current';
+        selectedSourceId = cs.id;
+        renderer.selectedSourceType = 'current';
+        renderer.selectedSourceId = cs.id;
+        isDraggingSource = true;
+        if (onSourceSelected) onSourceSelected('current', cs.id);
+        return;
+      }
+    }
+    if (currentWorld.currentSources.length >= MAX_CURRENT_SOURCES) return;
+    const newSource: CurrentSource = {
+      id: currentWorld.nextCurrentSourceId++,
+      x: wx, y: wy,
+      radius: CURRENT_DEFAULT_RADIUS,
+      strength: CURRENT_DEFAULT_STRENGTH,
+      type: CurrentType.Whirlpool,
+      direction: 0,
+    };
+    currentWorld.currentSources.push(newSource);
+    selectedSourceType = 'current';
+    selectedSourceId = newSource.id;
+    renderer.selectedSourceType = 'current';
+    renderer.selectedSourceId = newSource.id;
+    if (onSourceSelected) onSourceSelected('current', newSource.id);
   }
 
   // Mouse down: shift = tank edit (always), middle/right = pan, left = tool dispatch
@@ -533,6 +588,9 @@ export async function createRenderer(width: number, height: number): Promise<Ren
         case ToolMode.Temperature:
           handleTemperatureClick(wx, wy);
           break;
+        case ToolMode.Current:
+          handleCurrentClick(wx, wy);
+          break;
       }
     }
   });
@@ -552,7 +610,9 @@ export async function createRenderer(width: number, height: number): Promise<Ren
       const { wx, wy } = screenToWorld(sx, sy);
       const sources = selectedSourceType === 'light'
         ? currentWorld.lightSources
-        : currentWorld.temperatureSources;
+        : selectedSourceType === 'temperature'
+        ? currentWorld.temperatureSources
+        : currentWorld.currentSources;
       const src = sources.find(s => s.id === selectedSourceId);
       if (src) {
         src.x = wx;
@@ -612,8 +672,8 @@ export async function createRenderer(width: number, height: number): Promise<Ren
     setToolMode(mode: ToolMode): void {
       toolMode = mode;
       renderer.toolMode = mode;
-      // Deselect source when switching away from Light/Temperature tools
-      if (mode !== ToolMode.Light && mode !== ToolMode.Temperature) {
+      // Deselect source when switching away from environment tools
+      if (mode !== ToolMode.Light && mode !== ToolMode.Temperature && mode !== ToolMode.Current) {
         selectedSourceType = null;
         selectedSourceId = null;
         renderer.selectedSourceType = null;
@@ -784,7 +844,8 @@ export async function createRenderer(width: number, height: number): Promise<Ren
           lightSprites[i].y = src.y;
           lightSprites[i].width = src.radius * 2;
           lightSprites[i].height = src.radius * 2;
-          lightSprites[i].alpha = isLightTheme ? src.intensity * 0.85 : src.intensity * 0.2;
+          const dnMult = world.dayNightEnabled ? getDayNightMultiplier(world.dayNightPhase) : 1;
+          lightSprites[i].alpha = (isLightTheme ? src.intensity * 0.85 : src.intensity * 0.2) * dnMult;
         } else {
           lightSprites[i].visible = false;
         }
@@ -809,6 +870,27 @@ export async function createRenderer(width: number, height: number): Promise<Ren
           tempSprites[i].alpha = Math.abs(src.intensity) * 0.5;
         } else {
           tempSprites[i].visible = false;
+        }
+      }
+
+      // Manage current source gradient sprites
+      while (currentSprites.length < world.currentSources.length) {
+        const s = new Sprite(currentTexture);
+        s.anchor.set(0.5);
+        environmentContainer.addChild(s);
+        currentSprites.push(s);
+      }
+      for (let i = 0; i < currentSprites.length; i++) {
+        if (i < world.currentSources.length) {
+          const src = world.currentSources[i];
+          currentSprites[i].visible = true;
+          currentSprites[i].x = src.x;
+          currentSprites[i].y = src.y;
+          currentSprites[i].width = src.radius * 2;
+          currentSprites[i].height = src.radius * 2;
+          currentSprites[i].alpha = src.strength * 0.3;
+        } else {
+          currentSprites[i].visible = false;
         }
       }
 
@@ -1076,28 +1158,64 @@ export async function createRenderer(width: number, height: number): Promise<Ren
       if (toolMode === ToolMode.Light) {
         for (const ls of world.lightSources) {
           const isSelected = selectedSourceId === ls.id && selectedSourceType === 'light';
-          selectionGraphics.circle(ls.x, ls.y, isSelected ? 7 : 5);
+          selectionGraphics.circle(ls.x, ls.y, isSelected ? 16 : 12);
           selectionGraphics.fill({ color: 0xffe8a0, alpha: isSelected ? 0.8 : 0.45 });
+          if (isSelected) {
+            selectionGraphics.circle(ls.x, ls.y, 20);
+            selectionGraphics.stroke({ color: 0xffe8a0, width: 2, alpha: 0.6 });
+          }
         }
       } else if (toolMode === ToolMode.Temperature) {
         for (const ts of world.temperatureSources) {
           const isSelected = selectedSourceId === ts.id && selectedSourceType === 'temperature';
           const col = ts.intensity >= 0 ? 0xff5032 : 0x3250ff;
-          selectionGraphics.circle(ts.x, ts.y, isSelected ? 7 : 5);
+          selectionGraphics.circle(ts.x, ts.y, isSelected ? 16 : 12);
           selectionGraphics.fill({ color: col, alpha: isSelected ? 0.8 : 0.45 });
+          if (isSelected) {
+            selectionGraphics.circle(ts.x, ts.y, 20);
+            selectionGraphics.stroke({ color: col, width: 2, alpha: 0.6 });
+          }
+        }
+      } else if (toolMode === ToolMode.Current) {
+        for (const cs of world.currentSources) {
+          const isSelected = selectedSourceId === cs.id && selectedSourceType === 'current';
+          selectionGraphics.circle(cs.x, cs.y, isSelected ? 16 : 12);
+          selectionGraphics.fill({ color: CURRENT_COLOR, alpha: isSelected ? 0.8 : 0.45 });
+          if (isSelected) {
+            selectionGraphics.circle(cs.x, cs.y, 20);
+            selectionGraphics.stroke({ color: CURRENT_COLOR, width: 2, alpha: 0.6 });
+          }
+          // Flow indicator
+          if (cs.type === CurrentType.Directional) {
+            const dx = Math.cos(cs.direction) * cs.radius * 0.4;
+            const dy = Math.sin(cs.direction) * cs.radius * 0.4;
+            selectionGraphics.moveTo(cs.x - dx, cs.y - dy);
+            selectionGraphics.lineTo(cs.x + dx, cs.y + dy);
+            selectionGraphics.stroke({ color: CURRENT_COLOR, width: 2, alpha: 0.4 });
+          } else {
+            // Whirlpool arc indicator
+            selectionGraphics.arc(cs.x, cs.y, cs.radius * 0.3, 0, Math.PI * 1.5);
+            selectionGraphics.stroke({ color: CURRENT_COLOR, width: 2, alpha: 0.3 });
+          }
         }
       } else if (selectedSourceId !== null) {
         // Show selected source dot even in other tool modes
         const sources = selectedSourceType === 'light'
           ? world.lightSources
-          : world.temperatureSources;
+          : selectedSourceType === 'temperature'
+          ? world.temperatureSources
+          : world.currentSources;
         const src = sources.find(s => s.id === selectedSourceId);
         if (src) {
           const highlightColor = selectedSourceType === 'light'
             ? 0xffe8a0
-            : (src.intensity >= 0 ? 0xff5032 : 0x3250ff);
-          selectionGraphics.circle(src.x, src.y, 6);
+            : selectedSourceType === 'current'
+            ? CURRENT_COLOR
+            : ((src as TemperatureSource).intensity >= 0 ? 0xff5032 : 0x3250ff);
+          selectionGraphics.circle(src.x, src.y, 14);
           selectionGraphics.fill({ color: highlightColor, alpha: 0.6 });
+          selectionGraphics.circle(src.x, src.y, 18);
+          selectionGraphics.stroke({ color: highlightColor, width: 2, alpha: 0.5 });
         } else {
           selectedSourceType = null;
           selectedSourceId = null;

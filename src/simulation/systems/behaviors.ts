@@ -58,7 +58,7 @@ import {
 } from '../spatial-hash';
 import { removeOrganism } from '../world';
 import { runReproduction } from './reproduction';
-import { computeLight, computeMetabolismMultiplier } from '../environment';
+import { computeLight, computeMetabolismMultiplier, getDayNightMultiplier } from '../environment';
 import { spawnFood, updateFood, consumeFood } from '../food';
 import {
   runVirusSystem,
@@ -108,6 +108,7 @@ export function runBehaviors(world: World, config: SimConfig): void {
   // Compute depth layers once for all systems this tick
   computeDepthLayers(world);
 
+  runDayNightCycle(world);
   runPhotosynthesis(world, config);
   runRootDrain(world);
   runReplenishment(world);
@@ -120,6 +121,21 @@ export function runBehaviors(world: World, config: SimConfig): void {
   runHealthChecks(world);
   runTimedDeath(world);
   updateFood(world.food, world.tick, world.tankCells); // Decay + drift food particles
+}
+
+
+// ─── 0. Day/Night Cycle ──────────────────────────────────────
+/**
+ * Advance the day/night phase each tick.
+ * Speed is in "full cycles per sim-minute" (1200 ticks).
+ * The phase oscillates 0→1 continuously. getDayNightMultiplier()
+ * converts phase to a light intensity multiplier.
+ */
+function runDayNightCycle(world: World): void {
+  if (!world.dayNightEnabled || world.lightSources.length === 0) return;
+  // Advance phase: speed = cycles per 1200 ticks
+  const phaseStep = world.dayNightSpeed / 1200;
+  world.dayNightPhase = (world.dayNightPhase + phaseStep) % 1;
 }
 
 
@@ -139,6 +155,11 @@ function runPhotosynthesis(world: World, config: SimConfig): void {
   const seg = world.segments;
   const hasLights = world.lightSources.length > 0;
   const hasTempSources = world.temperatureSources.length > 0;
+
+  // Day/night multiplier for light sources
+  const dayNightMult = world.dayNightEnabled
+    ? getDayNightMultiplier(world.dayNightPhase)
+    : 1;
 
   for (const org of world.organisms.values()) {
     if (!org.alive) continue;
@@ -164,7 +185,7 @@ function runPhotosynthesis(world: World, config: SimConfig): void {
         if (isColorCorrupted(world, idx)) continue; // Virus suppresses photosynthesis
 
         let light = computeLight(
-          seg.x[idx], seg.y[idx], world.lightSources, world.tankCells,
+          seg.x[idx], seg.y[idx], world.lightSources, world.tankCells, dayNightMult,
         );
 
         if (world.isLightTheme) {

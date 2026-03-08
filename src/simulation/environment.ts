@@ -8,13 +8,16 @@
  * - Metabolism: Speed multiplier from local temperature
  */
 
-import type { LightSource, TemperatureSource } from '../types';
+import type { LightSource, TemperatureSource, CurrentSource } from '../types';
+import { CurrentType } from '../types';
 import {
   TANK_GRID_SPACING,
   VISCOSITY_MIN_DAMPING,
   VISCOSITY_MAX_DAMPING,
   TEMP_METABOLISM_MIN,
   TEMP_METABOLISM_MAX,
+  CURRENT_FORCE_SCALE,
+  DAY_NIGHT_MIN_INTENSITY,
 } from '../constants';
 
 
@@ -109,6 +112,7 @@ export function computeLight(
   x: number, y: number,
   sources: LightSource[],
   tankCells: Set<string>,
+  dayNightMult: number = 1,
 ): number {
   if (sources.length === 0) return 0;
 
@@ -124,7 +128,7 @@ export function computeLight(
     // Check occlusion by non-tank cells
     if (!isPathClear(s.x, s.y, x, y, tankCells)) continue;
 
-    total += quadraticFalloff(dist, s.radius, s.intensity);
+    total += quadraticFalloff(dist, s.radius, s.intensity) * dayNightMult;
   }
 
   return total;
@@ -202,4 +206,65 @@ export function computeMetabolismMultiplier(
 
   // Linear: temp +1 → 1.5x, temp -1 → 0.5x
   return Math.max(TEMP_METABOLISM_MIN, Math.min(TEMP_METABOLISM_MAX, 1.0 + temp * 0.5));
+}
+
+
+// ─── Current Force Field ─────────────────────────────────────
+
+/**
+ * Compute total current force at a world position.
+ * Whirlpool: tangential force (counterclockwise) with quadratic falloff.
+ * Directional: linear force along source.direction with quadratic falloff.
+ * No wall occlusion — force flows through boundaries.
+ */
+export function computeCurrentForce(
+  x: number, y: number,
+  sources: CurrentSource[],
+): { fx: number; fy: number } {
+  let fx = 0;
+  let fy = 0;
+  for (let i = 0; i < sources.length; i++) {
+    const s = sources[i];
+    const dx = x - s.x;
+    const dy = y - s.y;
+    const distSq = dx * dx + dy * dy;
+    const radiusSq = s.radius * s.radius;
+    if (distSq >= radiusSq || distSq < 1) continue;
+
+    const dist = Math.sqrt(distSq);
+    const t = dist / s.radius;
+    const falloff = 1 - t * t;
+    const force = s.strength * CURRENT_FORCE_SCALE * falloff;
+
+    if (s.type === CurrentType.Whirlpool) {
+      // Tangential: perpendicular to radius vector (counterclockwise)
+      const nx = -dy / dist;
+      const ny = dx / dist;
+      fx += nx * force;
+      fy += ny * force;
+    } else {
+      // Directional: constant direction
+      fx += Math.cos(s.direction) * force;
+      fy += Math.sin(s.direction) * force;
+    }
+  }
+  return { fx, fy };
+}
+
+
+// ─── Day/Night Cycle ─────────────────────────────────────────
+
+/**
+ * Compute the day/night light multiplier from the current phase.
+ * Phase 0 = midnight (minimum), phase 0.5 = noon (maximum).
+ * Returns DAY_NIGHT_MIN_INTENSITY..1.0 via sine wave.
+ */
+export function getDayNightMultiplier(phase: number): number {
+  // sin maps: phase 0 → sin(-π/2) = -1, phase 0.5 → sin(π/2-π/2)=sin(0)...
+  // Actually: we want phase 0.5 = noon = max (1.0), phase 0 = midnight = min
+  // Use: 0.5 + 0.5 * sin(2π*phase - π/2)
+  // At phase=0.5: sin(π - π/2) = sin(π/2) = 1 → 0.5+0.5 = 1.0 ✓
+  // At phase=0:   sin(0 - π/2) = sin(-π/2) = -1 → 0.5-0.5 = 0.0 → clamp to min ✓
+  const raw = 0.5 + 0.5 * Math.sin(phase * Math.PI * 2 - Math.PI / 2);
+  return DAY_NIGHT_MIN_INTENSITY + (1 - DAY_NIGHT_MIN_INTENSITY) * raw;
 }
