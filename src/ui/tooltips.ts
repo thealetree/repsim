@@ -45,7 +45,7 @@ const TOOLTIP_TEXTS: Record<string, string> = {
   'slider-repLimit': 'Maximum population cap — organisms stop reproducing above this',
   'slider-greenFeed': 'Energy gained per photosynthesis cycle (green segments)',
   'slider-blueHP': 'Extra health capacity per blue segment',
-  'slider-yellowFreq': 'Seconds between movement pulses (lower = faster)',
+  'slider-yellowFreq': 'Movement speed — how often yellow segments fire thrust',
   'slider-redDamage': 'Damage dealt per red segment attack',
   'slider-purpleCost': 'Health cost to reproduce sexually (black segments)',
   'slider-asexMutationRate': 'Mutation chance per gene during asexual reproduction (%)',
@@ -62,8 +62,6 @@ const TOOLTIP_TEXTS: Record<string, string> = {
   // Save/Share
   'share-org': 'Copy a shareable URL for this organism\'s genome',
   'share-copy-url': 'Generate a compressed URL with the selected components',
-  'share-download': 'Download the selected components as a .repsim file',
-  'share-load': 'Load a previously saved .repsim file',
 
   // Chart panels (brief labels)
   'chart-population': 'Total living organisms over time',

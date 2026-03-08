@@ -42,16 +42,16 @@ interface SliderDef {
   max: number;
   step: number;
   unit?: string;
+  invert?: boolean;  // When true, slider + means config value decreases (e.g. speed: + = lower yellowFreq = faster)
 }
 
 // Ranges are centered on DEFAULT_CONFIG values so the default sits at slider midpoint.
-// yellowFreq is inverted: low value = fast, high value = slow, so − = slow, + = fast.
 const CONFIG_SLIDERS: SliderDef[] = [
   { key: 'repCount', label: 'Start Pop', min: 10, max: 200, step: 10 },     // default 100
   { key: 'repLimit', label: 'Pop Limit', min: 50, max: 1000, step: 50 },   // default 500
   { key: 'greenFeed', label: 'Photo', min: 10, max: 190, step: 10 },       // default 100
   { key: 'blueHP', label: 'Armor', min: 100, max: 1900, step: 100 },       // default 1000
-  { key: 'yellowFreq', label: 'Speed', min: 0.25, max: 2.25, step: 0.25 }, // default 1.25
+  { key: 'yellowFreq', label: 'Speed', min: 0.25, max: 2.25, step: 0.25, invert: true }, // default 1.25; invert so + = faster
   { key: 'redDamage', label: 'Attack', min: 50, max: 750, step: 50 },      // default 400
   { key: 'purpleCost', label: 'Mate Cost', min: 500, max: 6500, step: 250 }, // default 3500
   { key: 'asexMutationRate', label: 'Mutate', min: 0, max: 2, step: 0.1 }, // default 1
@@ -635,7 +635,9 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
   // Config sliders
   let slidersContent = '';
   for (const def of CONFIG_SLIDERS) {
-    const val = (engine.config as unknown as Record<string, number>)[def.key];
+    let val = (engine.config as unknown as Record<string, number>)[def.key];
+    // Inverted sliders: display value = (min + max) - config value
+    if (def.invert) val = def.min + def.max - val;
     slidersContent += `
       <div class="slider-row" id="row-${def.key}">
         <span class="slider-label">${def.label}</span>
@@ -930,9 +932,12 @@ export function createUI(
   const configSliders = rightPanel.querySelectorAll<HTMLInputElement>('.config-slider');
   configSliders.forEach((slider) => {
     const key = slider.dataset.key!;
+    const def = CONFIG_SLIDERS.find(d => d.key === key);
 
     slider.addEventListener('input', () => {
-      const val = parseFloat(slider.value);
+      let val = parseFloat(slider.value);
+      // Inverted sliders: convert display value back to config value
+      if (def?.invert) val = def.min + def.max - val;
       (engine.config as unknown as Record<string, number | boolean>)[key] = val;
     });
   });
@@ -944,9 +949,12 @@ export function createUI(
       const defaults = DEFAULT_CONFIG as unknown as Record<string, number | boolean>;
       configSliders.forEach((slider) => {
         const key = slider.dataset.key!;
+        const sliderDef = CONFIG_SLIDERS.find(d => d.key === key);
         const defVal = defaults[key] as number;
         if (defVal !== undefined) {
-          slider.value = String(defVal);
+          // Invert display value for inverted sliders
+          const displayVal = sliderDef?.invert ? sliderDef.min + sliderDef.max - defVal : defVal;
+          slider.value = String(displayVal);
           (engine.config as unknown as Record<string, number | boolean>)[key] = defVal;
         }
       });

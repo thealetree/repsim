@@ -1,11 +1,10 @@
 /**
- * save-share.ts — Save/Share system for Repsim V2
+ * save-share.ts — URL-based Save/Share system for Repsim V2
  *
  * Handles:
  * - Organism sharing via compact URL (?o=)
  * - Tank config sharing via URL (?t=) with modular toggles
- * - File export/import (.repsim JSON files)
- * - URL parsing on startup
+ * - URL parsing on startup (paste a shared URL → loads automatically)
  *
  * Compression uses the browser's built-in CompressionStream (deflate)
  * with base64url encoding for URL-safe transport.
@@ -125,7 +124,7 @@ function serializeTank(
 
 // ─── URL Generation ──────────────────────────────────────────
 
-const URL_MAX_LENGTH = 2000;
+const URL_MAX_LENGTH = 8000; // Modern browsers support 8K+ URLs
 
 async function generateOrganismURL(payload: OrganismPayload): Promise<string | null> {
   const json = JSON.stringify(payload);
@@ -143,34 +142,21 @@ async function generateTankURL(payload: TankPayload): Promise<string | null> {
   return url.length <= URL_MAX_LENGTH ? url : null;
 }
 
-// ─── File Export/Import ──────────────────────────────────────
+// ─── Clipboard Helper ────────────────────────────────────────
 
-function downloadJSON(payload: OrganismPayload | TankPayload, filename: string): void {
-  const json = JSON.stringify(payload, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function loadFile(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.repsim,.json';
-    input.addEventListener('change', () => {
-      const file = input.files?.[0];
-      if (!file) { reject(new Error('No file selected')); return; }
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsText(file);
-    });
-    input.click();
-  });
+async function copyToClipboard(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    // Fallback for non-secure contexts or denied permissions
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-9999px;';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+  }
 }
 
 // ─── Apply Loaded Data ───────────────────────────────────────
@@ -251,7 +237,7 @@ export async function parseUrlParams(engine: SimulationEngine, renderer: Rendere
       const payload = JSON.parse(json) as OrganismPayload;
       if (payload.v === 1 && payload.g) {
         applyOrganismPayload(engine, payload);
-        console.log(`🧬 Loaded shared organism: ${payload.n}`);
+        console.log(`Loaded shared organism: ${payload.n}`);
       }
     }
 
@@ -261,7 +247,7 @@ export async function parseUrlParams(engine: SimulationEngine, renderer: Rendere
       if (payload.v === 1 && payload.tank) {
         applyTankPayload(engine, payload);
         renderer.setWallsDirty();
-        console.log(`🧬 Loaded shared tank config (${payload.tank.length} cells)`);
+        console.log(`Loaded shared tank config (${payload.tank.length} cells)`);
       }
     }
   } catch (err) {
@@ -340,32 +326,13 @@ export function buildSaveShareSection(
   }
   body.appendChild(toggleContainer);
 
-  // Buttons
-  const btnRow = document.createElement('div');
-  btnRow.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;';
-
+  // Copy URL button (full width)
   const copyBtn = document.createElement('button');
   copyBtn.className = 'ui-btn';
   copyBtn.textContent = 'Copy URL';
-  copyBtn.style.cssText = 'flex:1;font-size:10px;padding:5px 0;';
+  copyBtn.style.cssText = 'width:100%;font-size:10px;padding:5px 0;';
   if (tooltips) tooltips.attach(copyBtn, 'share-copy-url');
-
-  const downloadBtn = document.createElement('button');
-  downloadBtn.className = 'ui-btn';
-  downloadBtn.textContent = 'Download';
-  downloadBtn.style.cssText = 'flex:1;font-size:10px;padding:5px 0;';
-  if (tooltips) tooltips.attach(downloadBtn, 'share-download');
-
-  btnRow.appendChild(copyBtn);
-  btnRow.appendChild(downloadBtn);
-  body.appendChild(btnRow);
-
-  const loadBtn = document.createElement('button');
-  loadBtn.className = 'ui-btn';
-  loadBtn.textContent = 'Load from File';
-  loadBtn.style.cssText = 'width:100%;font-size:10px;padding:5px 0;';
-  if (tooltips) tooltips.attach(loadBtn, 'share-load');
-  body.appendChild(loadBtn);
+  body.appendChild(copyBtn);
 
   // Accordion toggle
   header.addEventListener('click', () => {
@@ -373,7 +340,7 @@ export function buildSaveShareSection(
     header.querySelector('.section-chevron')!.classList.toggle('collapsed', isCollapsed);
   });
 
-  // Button handlers
+  // Copy URL handler
   copyBtn.addEventListener('click', async () => {
     const payload = serializeTank(
       engine,
@@ -384,54 +351,13 @@ export function buildSaveShareSection(
     );
     const url = await generateTankURL(payload);
     if (url) {
-      try {
-        await navigator.clipboard.writeText(url);
-      } catch {
-        const ta = document.createElement('textarea');
-        ta.value = url;
-        ta.style.cssText = 'position:fixed;left:-9999px;';
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        ta.remove();
-      }
+      await copyToClipboard(url);
       const orig = copyBtn.textContent;
       copyBtn.textContent = 'Copied!';
       setTimeout(() => { copyBtn.textContent = orig; }, 1200);
       showToast('URL copied to clipboard!');
     } else {
-      showToast('Too large for URL — use Download instead');
-    }
-  });
-
-  downloadBtn.addEventListener('click', () => {
-    const payload = serializeTank(
-      engine,
-      checkboxes['share-lights'].checked,
-      checkboxes['share-temps'].checked,
-      checkboxes['share-config'].checked,
-      checkboxes['share-orgs'].checked,
-    );
-    downloadJSON(payload, `repsim-tank-${Date.now()}.repsim`);
-    showToast('Downloaded!');
-  });
-
-  loadBtn.addEventListener('click', async () => {
-    try {
-      const text = await loadFile();
-      const payload = JSON.parse(text);
-      if (payload.v === 1) {
-        if (payload.tank) {
-          applyTankPayload(engine, payload as TankPayload);
-          showToast('Tank loaded!');
-        } else if (payload.g) {
-          applyOrganismPayload(engine, payload as OrganismPayload);
-          showToast('Organism loaded!');
-        }
-      }
-    } catch (err) {
-      console.warn('Load failed:', err);
-      showToast('Failed to load file');
+      showToast('Too many organisms for URL — uncheck "All Organisms"');
     }
   });
 
@@ -462,26 +388,13 @@ export function createShareButton(
     const payload = serializeOrganism(org.genome, org.generation, org.name);
     const url = await generateOrganismURL(payload);
     if (url) {
-      try {
-        await navigator.clipboard.writeText(url);
-      } catch {
-        // Fallback for non-secure contexts or denied permissions
-        const ta = document.createElement('textarea');
-        ta.value = url;
-        ta.style.cssText = 'position:fixed;left:-9999px;';
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        ta.remove();
-      }
-      // Flash button text as confirmation
+      await copyToClipboard(url);
       const orig = btn.textContent;
       btn.textContent = 'Copied!';
       setTimeout(() => { btn.textContent = orig; }, 1200);
       showToast('Genome URL copied!');
     } else {
-      downloadJSON(payload, `repsim-${org.name}.repsim`);
-      showToast('Genome too large for URL — downloaded file');
+      showToast('Organism too complex to share via URL');
     }
   });
 
