@@ -135,28 +135,40 @@ async function generateTankURL(payload: TankPayload): Promise<string | null> {
 
 // ─── Clipboard Helper ────────────────────────────────────────
 
-async function copyToClipboard(text: string): Promise<boolean> {
-  // Try navigator.clipboard.writeText first (works in async HTTPS contexts).
-  if (navigator.clipboard?.writeText) {
+/**
+ * Copy text to clipboard using ClipboardItem with a deferred Promise.
+ * This registers the write synchronously (preserving user activation)
+ * while the actual data can resolve asynchronously.
+ */
+function copyDeferred(dataPromise: Promise<string>): Promise<boolean> {
+  // ClipboardItem with deferred blob — registered synchronously in user gesture
+  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
     try {
-      await navigator.clipboard.writeText(text);
-      return true;
+      const item = new ClipboardItem({
+        'text/plain': dataPromise.then(text =>
+          new Blob([text], { type: 'text/plain' })
+        ),
+      });
+      return navigator.clipboard.write([item]).then(() => true, () => false);
     } catch { /* fall through */ }
   }
-  // Fallback: execCommand (may fail if user activation expired after async work).
-  try {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.cssText = 'position:fixed;left:-9999px;top:0;';
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    const ok = document.execCommand('copy');
-    ta.remove();
-    return ok;
-  } catch {
-    return false;
-  }
+  // Fallback: await then try writeText / execCommand
+  return dataPromise.then(async (text) => {
+    if (navigator.clipboard?.writeText) {
+      try { await navigator.clipboard.writeText(text); return true; } catch { /* fall through */ }
+    }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;left:-9999px;top:0;';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch { return false; }
+  });
 }
 
 // ─── Apply Loaded Data ───────────────────────────────────────
@@ -358,32 +370,45 @@ export function buildSaveShareSection(
     header.querySelector('.section-chevron')!.classList.toggle('collapsed', isCollapsed);
   });
 
-  // Copy URL handler
-  copyBtn.addEventListener('click', async () => {
+  // Copy URL handler — copyDeferred is called synchronously in the click
+  // so the ClipboardItem registers before user activation expires.
+  copyBtn.addEventListener('click', () => {
     const payload = serializeTank(
       engine,
       checkboxes['share-lights'].checked,
       checkboxes['share-temps'].checked,
       checkboxes['share-config'].checked,
     );
-    const url = await generateTankURL(payload);
-    if (url) {
-      const copied = await copyToClipboard(url);
+    const urlPromise = generateTankURL(payload);
+
+    // Register clipboard write synchronously, data resolves async
+    const copyPromise = copyDeferred(
+      urlPromise.then(url => {
+        if (!url) throw new Error('too-large');
+        return url;
+      })
+    );
+
+    copyPromise.then(copied => {
       if (copied) {
         const orig = copyBtn.textContent;
         copyBtn.textContent = 'Copied!';
         setTimeout(() => { copyBtn.textContent = orig; }, 1200);
         showToast('URL copied to clipboard!');
       } else {
-        // Clipboard failed — put URL in load input so user can manually copy
-        loadInput.value = url;
-        loadInput.focus();
-        loadInput.select();
-        showToast('Select All + Copy the URL from the field below');
+        // Clipboard failed — put URL in load input for manual copy
+        urlPromise.then(url => {
+          if (url) {
+            loadInput.value = url;
+            loadInput.focus();
+            loadInput.select();
+            showToast('Select All + Copy the URL from the field below');
+          } else {
+            showToast('Tank too large to share via URL');
+          }
+        });
       }
-    } else {
-      showToast('Tank too large to share via URL');
-    }
+    });
   });
 
   // Load URL handler
@@ -441,23 +466,30 @@ export function createShareButton(
   btn.style.cssText = 'width:100%;font-size:10px;padding:4px 0;margin-top:6px;';
   if (tooltips) tooltips.attach(btn, 'share-org');
 
-  btn.addEventListener('click', async () => {
+  btn.addEventListener('click', () => {
     const orgId = getSelectedId();
     if (orgId === null) return;
     const org = engine.world.organisms.get(orgId);
     if (!org?.alive) return;
 
     const payload = serializeOrganism(org.genome, org.generation, org.name);
-    const url = await generateOrganismURL(payload);
-    if (url) {
-      await copyToClipboard(url);
-      const orig = btn.textContent;
-      btn.textContent = 'Copied!';
-      setTimeout(() => { btn.textContent = orig; }, 1200);
-      showToast('Genome URL copied!');
-    } else {
-      showToast('Organism too complex to share via URL');
-    }
+    const urlPromise = generateOrganismURL(payload);
+
+    copyDeferred(
+      urlPromise.then(url => {
+        if (!url) throw new Error('too-large');
+        return url;
+      })
+    ).then(copied => {
+      if (copied) {
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = orig; }, 1200);
+        showToast('Genome URL copied!');
+      } else {
+        showToast('Organism too complex to share via URL');
+      }
+    });
   });
 
   return btn;
