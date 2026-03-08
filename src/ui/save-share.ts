@@ -135,24 +135,28 @@ async function generateTankURL(payload: TankPayload): Promise<string | null> {
 
 // ─── Clipboard Helper ────────────────────────────────────────
 
-async function copyToClipboard(text: string): Promise<void> {
-  // navigator.clipboard.writeText works in async contexts on HTTPS
-  // (transient user activation persists ~5s, well beyond compress() time).
-  // execCommand('copy') is the sync fallback for HTTP/older browsers.
+async function copyToClipboard(text: string): Promise<boolean> {
+  // Try navigator.clipboard.writeText first (works in async HTTPS contexts).
   if (navigator.clipboard?.writeText) {
     try {
       await navigator.clipboard.writeText(text);
-      return;
-    } catch { /* fall through to execCommand */ }
+      return true;
+    } catch { /* fall through */ }
   }
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.style.cssText = 'position:fixed;left:-9999px;top:0;';
-  document.body.appendChild(ta);
-  ta.focus();
-  ta.select();
-  document.execCommand('copy');
-  ta.remove();
+  // Fallback: execCommand (may fail if user activation expired after async work).
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0;';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 // ─── Apply Loaded Data ───────────────────────────────────────
@@ -364,11 +368,19 @@ export function buildSaveShareSection(
     );
     const url = await generateTankURL(payload);
     if (url) {
-      await copyToClipboard(url);
-      const orig = copyBtn.textContent;
-      copyBtn.textContent = 'Copied!';
-      setTimeout(() => { copyBtn.textContent = orig; }, 1200);
-      showToast('URL copied to clipboard!');
+      const copied = await copyToClipboard(url);
+      if (copied) {
+        const orig = copyBtn.textContent;
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = orig; }, 1200);
+        showToast('URL copied to clipboard!');
+      } else {
+        // Clipboard failed — put URL in load input so user can manually copy
+        loadInput.value = url;
+        loadInput.focus();
+        loadInput.select();
+        showToast('Select All + Copy the URL from the field below');
+      }
     } else {
       showToast('Tank too large to share via URL');
     }
