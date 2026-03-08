@@ -53,7 +53,7 @@ export function injectEnvironmentPanelStyles(): void {
       bottom: 0;
       left: 50%;
       transform: translateX(-50%);
-      width: 120px;
+      padding: 0 14px;
       height: 22px;
       background: var(--ui-bg);
       backdrop-filter: blur(12px);
@@ -70,6 +70,7 @@ export function injectEnvironmentPanelStyles(): void {
       font-weight: 600;
       letter-spacing: 0.05em;
       text-transform: uppercase;
+      white-space: nowrap;
       color: var(--ui-text-muted);
       font-family: var(--ui-font);
       transition: bottom 0.25s ease;
