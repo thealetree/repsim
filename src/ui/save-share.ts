@@ -15,7 +15,7 @@ import type { Renderer } from '../rendering/renderer';
 import type { OrganismPayload, TankPayload, Gene, SimConfig } from '../types';
 import type { TooltipSystem } from './tooltips';
 import { DEFAULT_CONFIG } from '../constants';
-import { spawnOrganismFromGenome } from '../simulation/world';
+import { spawnOrganismFromGenome, removeOrganism } from '../simulation/world';
 
 // ─── Base64url Encoding (RFC 4648) ───────────────────────────
 
@@ -598,4 +598,69 @@ export function injectSaveShareStyles(): void {
     }
   `;
   document.head.appendChild(style);
+}
+
+// ─── Auto-Save / Auto-Restore (localStorage) ─────────────────
+
+const AUTOSAVE_KEY = 'repsim-autosave';
+
+/** Save current world state to localStorage (called every 15s) */
+export function autoSave(engine: SimulationEngine): void {
+  try {
+    const payload = serializeTank(engine, true, true, true, true);
+
+    // Serialize all living organisms
+    const orgs: OrganismPayload[] = [];
+    for (const org of engine.world.organisms.values()) {
+      if (org.alive) {
+        orgs.push(serializeOrganism(org.genome, org.generation, org.name));
+      }
+    }
+    payload.orgs = orgs;
+
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
+  } catch {
+    // Silently fail (quota exceeded, etc.)
+  }
+}
+
+/** Restore world state from localStorage. Returns true if restored. */
+export function autoRestore(engine: SimulationEngine): boolean {
+  try {
+    const json = localStorage.getItem(AUTOSAVE_KEY);
+    if (!json) return false;
+
+    const payload = JSON.parse(json) as TankPayload;
+    if (!payload || payload.v !== 1) return false;
+
+    // Clear the default-seeded organisms before restoring saved ones
+    const w = engine.world;
+    const idsToRemove: number[] = [];
+    for (const [id, org] of w.organisms) {
+      if (org.alive) idsToRemove.push(id);
+    }
+    for (const id of idsToRemove) {
+      removeOrganism(w, id);
+    }
+    w.organisms.clear();
+
+    // Reset segment allocation so restored organisms get clean slots
+    w.freeSegmentSlots.length = 0;
+    w.segmentCount = 0;
+
+    applyTankPayload(engine, payload);
+
+    // Reset stats so the clear/restore doesn't show misleading deaths/births
+    w.stats.births = 0;
+    w.stats.deaths = 0;
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Clear autosave data (called on New Tank) */
+export function clearAutoSave(): void {
+  localStorage.removeItem(AUTOSAVE_KEY);
 }

@@ -20,7 +20,7 @@ import { createRenderer } from './rendering/renderer';
 import { createUI } from './ui/ui';
 import { createTooltipSystem, injectTooltipStyles } from './ui/tooltips';
 import { createChartSystem, injectChartStyles } from './ui/charts';
-import { parseUrlParams, injectSaveShareStyles } from './ui/save-share';
+import { parseUrlParams, injectSaveShareStyles, autoSave, autoRestore } from './ui/save-share';
 import { createTutorialSystem, createTutorialButton, autoStartTutorial, injectTutorialStyles } from './ui/tutorial';
 import { createEnvironmentPanel, injectEnvironmentPanelStyles } from './ui/environment-panel';
 import { setupMobileLayout } from './ui/mobile-layout';
@@ -64,6 +64,13 @@ async function main(): Promise<void> {
   // ── 8. Save/Share System ──
   injectSaveShareStyles();
   await parseUrlParams(engine, renderer);
+
+  // ── 8a. Auto-restore from localStorage (if no URL params) ──
+  const urlHasParams = window.location.search.length > 1;
+  if (!urlHasParams) {
+    const restored = autoRestore(engine);
+    if (restored) console.log('🧬 Restored autosave');
+  }
 
   // ── 8b. Bottom Environment Panel ──
   injectEnvironmentPanelStyles();
@@ -110,6 +117,9 @@ async function main(): Promise<void> {
   // Kick off the loop!
   requestAnimationFrame(gameLoop);
   console.log('🧬 Repsim V2 — Running!');
+
+  // ── 11. Auto-save every 15 seconds ──
+  setInterval(() => autoSave(engine), 15_000);
 
   // ── Debug: expose engine for console inspection ──
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

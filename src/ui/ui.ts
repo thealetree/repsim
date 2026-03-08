@@ -18,7 +18,7 @@ import {
   DEFAULT_CONFIG,
 } from '../constants';
 import { createSpontaneousStrain, infectSegment } from '../simulation/virus';
-import { buildSaveShareSection, createShareButton, createSpawnInput } from './save-share';
+import { buildSaveShareSection, createShareButton, createSpawnInput, clearAutoSave } from './save-share';
 
 // ─── Color names for display ──────────────────────────────────
 const COLOR_NAMES: Record<number, string> = {
@@ -949,6 +949,7 @@ export function createUI(
 
   // ── New Tank (full reset) ──
   document.getElementById('repsim-new-tank')!.addEventListener('click', () => {
+    clearAutoSave();
     engine.reset();
     renderer.selectedOrganismId = null;
     renderer.selectedSourceType = null;
