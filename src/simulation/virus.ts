@@ -24,7 +24,7 @@
  */
 
 import type { World, SimConfig, ViralStrain, VirusStrainPool, Organism } from '../types';
-import { SegmentColor, VirusEffect, SEGMENT_COLOR_COUNT } from '../types';
+import { SegmentColor, VirusEffect, SEGMENT_COLOR_COUNT, effectsToMask } from '../types';
 import {
   VIRUS_MAX_STRAINS,
   VIRUS_FOOD_DENSITY_THRESHOLD,
@@ -42,7 +42,6 @@ import {
   VIRUS_INITIAL_TRANSMISSION_MIN,
   VIRUS_INITIAL_TRANSMISSION_MAX,
   VIRUS_SPREAD_RANGE,
-  BLUR_LAYER_COUNT,
   FOOD_MAX_PARTICLES,
   SIM_TICKS_PER_SECOND,
 } from '../constants';
@@ -64,6 +63,7 @@ export function createVirusStrainPool(): VirusStrainPool {
       virulence: 0,
       transmissionRate: 0,
       effects: [],
+      effectsMask: 0,
       parentStrainId: -1,
       alive: false,
       hostCount: 0,
@@ -93,6 +93,7 @@ export function createStrain(
   strain.virulence = virulence;
   strain.transmissionRate = transmissionRate;
   strain.effects = effects;
+  strain.effectsMask = effectsToMask(effects);
   strain.parentStrainId = parentStrainId;
   strain.alive = true;
   strain.hostCount = 0;
@@ -152,7 +153,14 @@ export function createSpontaneousStrain(
 }
 
 
-/** Clone a strain with mutation (on spread). Returns new pool index or -1. */
+/**
+ * Attempt to mutate a strain on spread. If the mutation is significant
+ * (color affinity changes), create a new child strain. Otherwise, reuse
+ * the parent strain — infections from the same lineage share a strain ID
+ * unless a meaningful mutation occurs.
+ *
+ * Returns pool index (may be the parent's own index if no new strain created), or -1 on error.
+ */
 export function mutateStrain(
   pool: VirusStrainPool,
   parentPoolIndex: number,
@@ -161,16 +169,28 @@ export function mutateStrain(
   const parent = pool.strains[parentPoolIndex];
   if (!parent.alive) return -1;
 
-  // Drift virulence and transmission
+  // Roll whether color affinity mutates (the significant mutation)
+  const colorMutated = Math.random() < VIRUS_COLOR_MUTATION_CHANCE;
+
+  if (!colorMutated) {
+    // Minor drift only — apply in-place to parent strain and reuse it
+    parent.virulence += (Math.random() * 2 - 1) * VIRUS_MUTATION_DRIFT;
+    parent.virulence = Math.max(0.01, Math.min(1, parent.virulence));
+    parent.transmissionRate += (Math.random() * 2 - 1) * VIRUS_MUTATION_DRIFT;
+    parent.transmissionRate = Math.max(0.01, Math.min(1, parent.transmissionRate));
+    return parentPoolIndex; // Reuse parent strain
+  }
+
+  // Significant mutation: new color affinity → create a new child strain
   let virulence = parent.virulence + (Math.random() * 2 - 1) * VIRUS_MUTATION_DRIFT;
   let transmission = parent.transmissionRate + (Math.random() * 2 - 1) * VIRUS_MUTATION_DRIFT;
   virulence = Math.max(0.01, Math.min(1, virulence));
   transmission = Math.max(0.01, Math.min(1, transmission));
 
-  // Small chance of color affinity change
-  let colorAffinity = parent.colorAffinity;
-  if (Math.random() < VIRUS_COLOR_MUTATION_CHANCE) {
-    colorAffinity = Math.floor(Math.random() * SEGMENT_COLOR_COUNT) as SegmentColor;
+  let colorAffinity = Math.floor(Math.random() * SEGMENT_COLOR_COUNT) as SegmentColor;
+  // Ensure it actually changed
+  if (colorAffinity === parent.colorAffinity) {
+    colorAffinity = ((colorAffinity + 1) % SEGMENT_COLOR_COUNT) as SegmentColor;
   }
 
   return createStrain(
@@ -186,7 +206,20 @@ export function mutateStrain(
 
 // ─── Infection ─────────────────────────────────────────────
 
-/** Check if an organism is immune to a strain (walks lineage). */
+// Module-level strain ID → pool index lookup for O(1) lineage walks.
+const _strainIdToIndex = new Map<number, number>();
+
+/** Rebuild strain ID lookup. Called before lineage walks. */
+function syncStrainIdLookup(pool: VirusStrainPool): void {
+  _strainIdToIndex.clear();
+  for (let i = 0; i < pool.strains.length; i++) {
+    if (pool.strains[i].alive) {
+      _strainIdToIndex.set(pool.strains[i].id, i);
+    }
+  }
+}
+
+/** Check if an organism is immune to a strain (walks lineage with O(1) lookups). */
 function isImmuneToStrain(org: Organism, strain: ViralStrain, pool: VirusStrainPool): boolean {
   // Check this strain's ID
   if (org.immuneTo.has(strain.id)) return true;
@@ -196,10 +229,9 @@ function isImmuneToStrain(org: Organism, strain: ViralStrain, pool: VirusStrainP
   let steps = 0;
   while (parentId !== -1 && steps < 20) {
     if (org.immuneTo.has(parentId)) return true;
-    // Find strain by ID in pool
-    const parentStrain = pool.strains.find(s => s.id === parentId);
-    if (!parentStrain) break;
-    parentId = parentStrain.parentStrainId;
+    const idx = _strainIdToIndex.get(parentId);
+    if (idx === undefined) break;
+    parentId = pool.strains[idx].parentStrainId;
     steps++;
   }
 
@@ -314,11 +346,15 @@ export function runVirusSystem(
   config: SimConfig,
   attackHash: SpatialHash,
   foodHash: SpatialHash,
+  orgDepthLayer: Map<number, number>,
 ): void {
   if (!config.virusEnabled) return;
 
+  // Build strain ID→index lookup once per virus tick (O(maxStrains), used by lineage walks)
+  syncStrainIdLookup(world.virusStrains);
+
   checkViralFoodSpawning(world, foodHash);
-  runVirusSpread(world, config, attackHash);
+  runVirusSpread(world, config, attackHash, orgDepthLayer);
   applyVirusEffects(world, config);
   runImmunityChecks(world, config);
   cleanupExtinctStrains(world);
@@ -365,29 +401,26 @@ function checkViralFoodSpawning(
 }
 
 
+// Module-level reusable Set for virus spread (avoids per-call allocation).
+const _infectedThisTick = new Set<number>();
+
 /** Spread virus on ANY segment collision between infected and uninfected organisms. */
 function runVirusSpread(
   world: World,
   config: SimConfig,
   attackHash: SpatialHash,
+  orgDepthLayer: Map<number, number>,
 ): void {
   if (world.tick % VIRUS_SPREAD_CHECK_INTERVAL !== 0) return;
 
   const seg = world.segments;
   const pool = world.virusStrains;
   const rangeSq = VIRUS_SPREAD_RANGE * VIRUS_SPREAD_RANGE;
+  // Depth layers provided by caller (computed once per tick in behaviors)
 
-  // Pre-compute depth layers + track which orgs already spread this tick
-  const orgDepthLayer = new Map<number, number>();
-  for (const org of world.organisms.values()) {
-    if (org.alive) {
-      orgDepthLayer.set(org.id, Math.min(BLUR_LAYER_COUNT - 1,
-        Math.floor(org.depth * BLUR_LAYER_COUNT)));
-    }
-  }
-
-  // Track organisms already infected this tick to avoid double-infecting
-  const infectedThisTick = new Set<number>();
+  // Track organisms already infected this tick (reuse module-level Set)
+  _infectedThisTick.clear();
+  const infectedThisTick = _infectedThisTick;
 
   // Iterate all infected segments — any touch can spread
   for (let idx = 0; idx < world.segmentCount; idx++) {
@@ -472,7 +505,7 @@ function applyVirusEffects(world: World, config: SimConfig): void {
     org.rootHealthReserve -= drainPerTick;
 
     // EnergyDrain effect: bonus drain on top of base virulence drain
-    if (strain.effects.includes(VirusEffect.EnergyDrain)) {
+    if ((strain.effectsMask & (1 << VirusEffect.EnergyDrain)) !== 0) {
       org.rootHealthReserve -= drainPerTick * 0.5; // +50% bonus drain
     }
   }
@@ -534,15 +567,15 @@ function runImmunityChecks(world: World, config: SimConfig): void {
 
     // Check if enough time has passed — cure the whole organism at once
     if (world.tick - infectedAt >= immunityTicks) {
-      // Gain immunity to this strain and ancestors
+      // Gain immunity to this strain and ancestors (O(1) lookups via _strainIdToIndex)
       org.immuneTo.add(strain.id);
       let parentId = strain.parentStrainId;
       let steps = 0;
       while (parentId !== -1 && steps < 20) {
         org.immuneTo.add(parentId);
-        const parentStrain = pool.strains.find(s => s.id === parentId);
-        if (!parentStrain) break;
-        parentId = parentStrain.parentStrainId;
+        const pIdx = _strainIdToIndex.get(parentId);
+        if (pIdx === undefined) break;
+        parentId = pool.strains[pIdx].parentStrainId;
         steps++;
       }
 
@@ -579,7 +612,7 @@ export function isColorCorrupted(world: World, segGlobalIdx: number): boolean {
   if (!strain?.alive) return false;
 
   // Only strains with the ColorCorruption effect disable segment behavior
-  if (!strain.effects.includes(VirusEffect.ColorCorruption)) return false;
+  if ((strain.effectsMask & (1 << VirusEffect.ColorCorruption)) === 0) return false;
 
   // Virus completely disables segments matching the strain's color affinity
   return world.segments.color[segGlobalIdx] === strain.colorAffinity;

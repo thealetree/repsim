@@ -26,7 +26,8 @@ import {
   TANK_HALF_HEIGHT,
   TANK_GRID_SPACING,
   SEGMENT_BASE_HEALTH,
-  ROOT_HEALTH_RESERVE_START,
+  getMaxReserve,
+  getStartReserve,
   MIN_SEGMENTS,
   MAX_SEGMENTS,
   TIMED_DEATH_MIN_TICKS,
@@ -468,13 +469,19 @@ export function spawnOrganismFromGenome(
   // V1: yellowFreq = 1.25 seconds → at 20 tps = 25 ticks
   const yellowIntervalTicks = Math.round(config.yellowFreq * 20);
 
+  // Compute genome fingerprint once at spawn (used by charts for species diversity).
+  // Species = same color sequence + tree topology. Angle/length differences are
+  // individual variation within a species, not speciation events.
+  const fingerprint = genome.map(g => `${g.color}:${g.parent}`).join(',');
+
   const organism: Organism = {
     id,
     firstSegment,
     segmentCount: count,
     genome: genome.map(g => ({ ...g })), // Deep copy — mutations don't affect parent
     name: generateName(genome),
-    rootHealthReserve: ROOT_HEALTH_RESERVE_START,
+    rootHealthReserve: getStartReserve(count),
+    rootHealthReserveMax: getMaxReserve(count),
     reproMeter: 0,
     generation,
     childCount: 0,
@@ -490,6 +497,7 @@ export function spawnOrganismFromGenome(
     nextMoveTick: world.tick + randomInt(1, yellowIntervalTicks), // Stagger initial movement
     lastAttackTick: 0,
     topology,
+    fingerprint,
   };
 
   // ─── Place segments in a TREE ───
@@ -724,6 +732,11 @@ export function removeOrganism(world: World, id: number): void {
 
   world.stats.population--;
   world.stats.deaths++;
+
+  // Remove from the Map so hot loops don't iterate dead entries.
+  // Every system checks `org.alive` anyway, but leaving dead entries causes
+  // unbounded Map growth over time and wastes iteration budget.
+  world.organisms.delete(id);
 }
 
 /**

@@ -28,8 +28,7 @@ import { SegmentColor } from '../../types';
 import {
   GREEN_FEED_INTERVAL_TICKS,
   ROOT_DRAIN_INTERVAL_TICKS,
-  ROOT_DRAIN_AMOUNT,
-  ROOT_HEALTH_RESERVE_MAX,
+  getRootDrain,
   REPLENISH_INTERVAL_TICKS,
   REPLENISH_AMOUNT,
   YELLOW_THRUST_STRENGTH,
@@ -77,7 +76,23 @@ export const attackSpatialHash = createSpatialHash();
 export const foodSpatialHash = createSpatialHash();
 
 // Module-level reusable Map for depth layer lookups (avoids allocation per tick).
-const _orgDepthLayer = new Map<number, number>();
+// Shared across behaviors, constraints, and virus systems.
+export const _orgDepthLayer = new Map<number, number>();
+
+/** Rebuild the shared depth layer map from alive organisms. Call once per tick. */
+export function computeDepthLayers(world: World): void {
+  _orgDepthLayer.clear();
+  for (const org of world.organisms.values()) {
+    _orgDepthLayer.set(org.id, Math.min(
+      BLUR_LAYER_COUNT - 1,
+      Math.floor(org.depth * BLUR_LAYER_COUNT),
+    ));
+  }
+}
+
+// Module-level reusable arrays for organism removal (avoids per-tick allocation).
+const _healthToRemove: number[] = [];
+const _timedToRemove: number[] = [];
 
 
 /**
@@ -88,6 +103,9 @@ const _orgDepthLayer = new Map<number, number>();
  * - Death removals happen before constraint iteration
  */
 export function runBehaviors(world: World, config: SimConfig): void {
+  // Compute depth layers once for all systems this tick
+  computeDepthLayers(world);
+
   runPhotosynthesis(world, config);
   runRootDrain(world);
   runReplenishment(world);
@@ -95,7 +113,7 @@ export function runBehaviors(world: World, config: SimConfig): void {
   runYellowMovement(world, config);
   runRedAttack(world, config);
   runScavenging(world, config);     // Segments eat food particles (white orgs: any seg)
-  runVirusSystem(world, config, attackSpatialHash, foodSpatialHash); // Virus spread, effects, immunity
+  runVirusSystem(world, config, attackSpatialHash, foodSpatialHash, _orgDepthLayer); // Virus spread, effects, immunity
   runSegmentDepthPropagation(world); // Wave per-segment depth from root → leaves
   runHealthChecks(world);
   runTimedDeath(world);
@@ -108,7 +126,7 @@ export function runBehaviors(world: World, config: SimConfig): void {
  * Green segments generate energy for their organism.
  *
  * V1: Every 1s, each green segment adds `greenFeed` (default 100) HP
- * to rootHealthReserve, capped at ROOT_HEALTH_RESERVE_MAX (5000).
+ * to rootHealthReserve, capped at org.rootHealthReserveMax (size-scaled).
  *
  * In V2 we check `tick % interval === 0` for simplicity — all organisms
  * photosynthesize on the same tick. This is fine because it's just addition.
@@ -158,7 +176,7 @@ function runPhotosynthesis(world: World, config: SimConfig): void {
 
       if (totalLightFeed > 0) {
         org.rootHealthReserve = Math.min(
-          ROOT_HEALTH_RESERVE_MAX,
+          org.rootHealthReserveMax,
           org.rootHealthReserve + totalLightFeed * config.greenFeed * metabolismMult,
         );
       }
@@ -174,7 +192,7 @@ function runPhotosynthesis(world: World, config: SimConfig): void {
 
       if (greenContribution > 0) {
         org.rootHealthReserve = Math.min(
-          ROOT_HEALTH_RESERVE_MAX,
+          org.rootHealthReserveMax,
           org.rootHealthReserve + greenContribution * config.greenFeed * metabolismMult,
         );
       }
@@ -208,7 +226,7 @@ function runRootDrain(world: World): void {
       );
     }
 
-    org.rootHealthReserve -= ROOT_DRAIN_AMOUNT * metabolismMult;
+    org.rootHealthReserve -= getRootDrain(org.genome.length) * metabolismMult;
     // Don't clamp to 0 here — healthChecks will handle death
   }
 }
@@ -379,16 +397,7 @@ function runYellowMovement(world: World, config: SimConfig): void {
 function runRedAttack(world: World, config: SimConfig): void {
   const seg = world.segments;
   const count = world.segmentCount;
-
-  // Pre-compute depth layer per organism (reuse module-level Map)
-  _orgDepthLayer.clear();
-  for (const org of world.organisms.values()) {
-    if (!org.alive) continue;
-    _orgDepthLayer.set(org.id, Math.min(
-      BLUR_LAYER_COUNT - 1,
-      Math.floor(org.depth * BLUR_LAYER_COUNT),
-    ));
-  }
+  // Depth layers already computed at start of runBehaviors via computeDepthLayers()
 
   // Build spatial hash of all alive segments (for proximity queries)
   clearSpatialHash(attackSpatialHash);
@@ -444,7 +453,7 @@ function runRedAttack(world: World, config: SimConfig): void {
 
         // Attacker gains HP (predator-prey reward)
         org.rootHealthReserve += damage * RED_ATTACK_HP_GAIN_FRACTION;
-        org.rootHealthReserve = Math.min(org.rootHealthReserve, ROOT_HEALTH_RESERVE_MAX);
+        org.rootHealthReserve = Math.min(org.rootHealthReserve, org.rootHealthReserveMax);
 
         didAttack = true;
         break; // One target per red segment per attack
@@ -527,7 +536,7 @@ function runScavenging(world: World, config: SimConfig): void {
         // Eat the food
         const { energy, wasViral, viralColor } = consumeFood(world.food, fi);
         org.rootHealthReserve += energy * orgEfficiency;
-        org.rootHealthReserve = Math.min(org.rootHealthReserve, ROOT_HEALTH_RESERVE_MAX);
+        org.rootHealthReserve = Math.min(org.rootHealthReserve, org.rootHealthReserveMax);
 
         // Viral food: infect the eating organism with a strain matching the food's color
         if (wasViral && config.virusEnabled) {
@@ -560,7 +569,8 @@ function runScavenging(world: World, config: SimConfig): void {
  */
 function runHealthChecks(world: World): void {
   const seg = world.segments;
-  const toRemove: number[] = [];
+  _healthToRemove.length = 0;
+  const toRemove = _healthToRemove;
 
   for (const org of world.organisms.values()) {
     if (!org.alive) continue;
@@ -698,7 +708,8 @@ function runSegmentDepthPropagation(world: World): void {
  * generational turnover — essential for evolution to work.
  */
 function runTimedDeath(world: World): void {
-  const toRemove: number[] = [];
+  _timedToRemove.length = 0;
+  const toRemove = _timedToRemove;
 
   for (const org of world.organisms.values()) {
     if (!org.alive) continue;

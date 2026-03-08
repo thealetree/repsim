@@ -38,6 +38,9 @@ export interface EventMap {
   // Virus events
   'virus:outbreak': { strainId: number; colorAffinity: number };
   'virus:strain_extinct': { strainId: number };
+
+  // Chart data sampling
+  'chart:sample': { tick: number };
 }
 
 // The event names are the keys of EventMap
@@ -90,9 +93,10 @@ export function createEventBus(): EventBus {
 
     emit<K extends EventName>(event: K, data: EventMap[K]): void {
       const set = listeners.get(event);
-      if (set) {
-        // Iterate a copy in case a listener modifies the set during iteration
-        for (const fn of [...set]) {
+      if (set && set.size > 0) {
+        // Iterate Set directly — safe because listeners don't self-remove during emit.
+        // Avoids array spread allocation on every emit call.
+        for (const fn of set) {
           fn(data);
         }
       }

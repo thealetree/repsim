@@ -16,8 +16,9 @@
  */
 
 import type { World, SimConfig } from '../types';
-import { SIM_DT, DEFAULT_CONFIG } from '../constants';
-import { createWorld, seedPopulation } from './world';
+import { SIM_DT, DEFAULT_CONFIG, CHART_SAMPLE_INTERVAL } from '../constants';
+import { createWorld, seedPopulation, removeOrganism } from './world';
+import { createVirusStrainPool } from './virus';
 import { runConstraints } from './systems/constraints';
 import { runBehaviors } from './systems/behaviors';
 import type { EventBus } from '../events';
@@ -55,6 +56,9 @@ export interface SimulationEngine {
 
   /** Reset the simulation with a fresh world */
   reset(): void;
+
+  /** Flush all organisms from the tank, keeping tank shape, lights, temps, config */
+  flush(): void;
 }
 
 
@@ -131,6 +135,44 @@ export function createSimulationEngine(
       engine.accumulator = 0;
       events.emit('sim:reset', undefined);
     },
+
+    /** Flush all organisms — keep tank, lights, temps, config; reseed fresh population */
+    flush(): void {
+      const w = engine.world;
+      // Kill all alive organisms (removeOrganism now deletes from Map, so collect IDs first)
+      const idsToRemove: number[] = [];
+      for (const [id, org] of w.organisms) {
+        if (org.alive) idsToRemove.push(id);
+      }
+      for (const id of idsToRemove) {
+        removeOrganism(w, id);
+      }
+      w.organisms.clear(); // Ensure no stale dead entries remain
+
+      // Reset food particles properly (count + alive flags + free slots)
+      const food = w.food;
+      food.count = 0;
+      food.alive.fill(0);
+      food.freeSlots.length = 0;
+      for (let i = food.x.length - 1; i >= 0; i--) {
+        food.freeSlots.push(i);
+      }
+
+      // Reset virus strain pool properly (rebuild pool + free slots)
+      w.virusStrains = createVirusStrainPool();
+
+      // Reset segment allocation state
+      w.freeSegmentSlots.length = 0;
+      w.segmentCount = 0;
+
+      // Reset stats (keep tick running)
+      w.stats.population = 0;
+      w.stats.births = 0;
+      w.stats.deaths = 0;
+      // Reseed population
+      seedPopulation(w, engine.config);
+      events.emit('sim:reset', undefined);
+    },
   };
 
   return engine;
@@ -164,9 +206,6 @@ function tickSimulation(world: World, config: SimConfig, events: EventBus): void
   runConstraints(world, config);
 
   // ── Emit events ──
-  // The sim:tick event fires every tick (for precise UI updates if needed)
-  events.emit('sim:tick', { tick: world.tick });
-
   // Stats update fires every 20 ticks (~1 second) to avoid flooding the event bus
   if (world.tick % 20 === 0) {
     events.emit('stats:updated', {
@@ -175,5 +214,10 @@ function tickSimulation(world: World, config: SimConfig, events: EventBus): void
       deaths: world.stats.deaths,
       tick: world.tick,
     });
+  }
+
+  // Chart data sampling (every CHART_SAMPLE_INTERVAL ticks)
+  if (world.tick % CHART_SAMPLE_INTERVAL === 0) {
+    events.emit('chart:sample', { tick: world.tick });
   }
 }

@@ -15,7 +15,6 @@ import { ToolMode } from '../types';
 import {
   SEGMENT_RENDER_COLORS,
   REPRO_METER_MAX,
-  ROOT_HEALTH_RESERVE_MAX,
   LIGHT_MIN_RADIUS,
   LIGHT_MAX_RADIUS,
   TEMP_MIN_RADIUS,
@@ -23,6 +22,7 @@ import {
   DEFAULT_CONFIG,
 } from '../constants';
 import { createSpontaneousStrain, infectSegment } from '../simulation/virus';
+import { buildSaveShareSection, createShareButton } from './save-share';
 
 // ─── Color names for display ──────────────────────────────────
 const COLOR_NAMES: Record<number, string> = {
@@ -142,6 +142,9 @@ function injectStyles(): void {
       color: var(--ui-text);
       font-variant-numeric: tabular-nums;
       margin-left: 4px;
+      min-width: 3ch;
+      display: inline-block;
+      text-align: right;
     }
 
     /* ── Buttons ── */
@@ -182,6 +185,10 @@ function injectStyles(): void {
       background: var(--ui-surface-hover);
       color: var(--ui-text);
     }
+    .btn-group { display: flex; align-items: center; }
+    .btn-group .ui-btn { border-radius: 0; }
+    .btn-group .btn-group-left { border-radius: 6px 0 0 6px; border-right: none; }
+    .btn-group .btn-group-right { border-radius: 0 6px 6px 0; }
 
     #repsim-speed-controls {
       display: flex;
@@ -569,7 +576,7 @@ function buildTopBar(): HTMLElement {
         <span class="stat-item">Pop<span class="stat-value" id="stat-pop">0</span></span>
         <span class="stat-item">Births<span class="stat-value" id="stat-births">0</span></span>
         <span class="stat-item">Deaths<span class="stat-value" id="stat-deaths">0</span></span>
-        <span class="stat-item">Tick<span class="stat-value" id="stat-tick">0</span></span>
+        <span class="stat-item" id="stat-time-wrap">&#9201;<span class="stat-value" id="stat-time">0:00</span></span>
       </div>
       <div class="top-divider"></div>
       <div id="repsim-tool-icons">
@@ -582,7 +589,7 @@ function buildTopBar(): HTMLElement {
         </button>
         <div class="tool-sep"></div>
         <button class="tool-icon" data-tool="2" title="Light">
-          <svg viewBox="0 0 24 24"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-4a1 1 0 011 1v1a1 1 0 01-2 0V4a1 1 0 011-1zm0 16a1 1 0 011 1v1a1 1 0 01-2 0v-1a1 1 0 011-1zm7.07-12.07a1 1 0 010 1.41l-.7.71a1 1 0 11-1.42-1.42l.71-.7a1 1 0 011.41 0zM5.64 17.36a1 1 0 010 1.41l-.7.71a1 1 0 11-1.42-1.42l.71-.7a1 1 0 011.41 0zM21 12a1 1 0 01-1 1h-1a1 1 0 010-2h1a1 1 0 011 1zM5 12a1 1 0 01-1 1H3a1 1 0 010-2h1a1 1 0 011 1zm13.36 5.36a1 1 0 011.41 0l.71.7a1 1 0 01-1.42 1.42l-.7-.71a1 1 0 010-1.41zM6.34 6.34a1 1 0 011.42 0l.7.71A1 1 0 017.05 8.46l-.71-.7a1 1 0 010-1.42z"/></svg>
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
         </button>
         <div class="tool-sep"></div>
         <button class="tool-icon" data-tool="3" title="Temperature">
@@ -591,7 +598,10 @@ function buildTopBar(): HTMLElement {
       </div>
     </div>
     <div class="top-right">
-      <button class="ui-btn" id="repsim-new-tank" title="New Tank">New Tank</button>
+      <div class="btn-group">
+        <button class="ui-btn btn-group-left" id="repsim-flush" title="Flush">Flush</button>
+        <button class="ui-btn btn-group-right" id="repsim-new-tank" title="New">New</button>
+      </div>
       <div id="repsim-speed-controls">
         <button class="ui-btn" data-speed="0" title="Pause">&#10073;&#10073;</button>
         <button class="ui-btn active" data-speed="1" title="Normal">1x</button>
@@ -601,7 +611,7 @@ function buildTopBar(): HTMLElement {
       </div>
       <!-- desaturation toggle hidden for now -->
       <button class="ui-btn-icon" id="repsim-desat-toggle" title="Toggle desaturation" style="display:none">&#9681;</button>
-      <button class="ui-btn-icon" id="repsim-theme-toggle" title="Toggle theme">&#9790;</button>
+      <button class="ui-btn-icon" id="repsim-theme-toggle" title="Toggle theme"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M21.64 13a1 1 0 00-1.05-.14 8.05 8.05 0 01-3.37.73A8.15 8.15 0 019.08 5.49a8.59 8.59 0 01.25-2 1 1 0 00-1.28-1.18A10 10 0 1021.93 14.12a1 1 0 00-.29-1.12z"/></svg></button>
     </div>
   `;
   return bar;
@@ -730,7 +740,7 @@ function renderOrganismInfo(org: Organism | undefined): string {
     return '<span class="org-placeholder">Click an organism to inspect</span>';
   }
 
-  const healthPct = Math.round((org.rootHealthReserve / ROOT_HEALTH_RESERVE_MAX) * 100);
+  const healthPct = Math.round((org.rootHealthReserve / org.rootHealthReserveMax) * 100);
   const reproPct = Math.round((org.reproMeter / REPRO_METER_MAX) * 100);
 
   let dots = '<div class="genome-dots">';
@@ -761,6 +771,7 @@ export function createUI(
   engine: SimulationEngine,
   renderer: Renderer,
   events: EventBus,
+  tooltips?: import('./tooltips').TooltipSystem,
 ): void {
   injectStyles();
 
@@ -778,14 +789,27 @@ export function createUI(
   const statPop = document.getElementById('stat-pop')!;
   const statBirths = document.getElementById('stat-births')!;
   const statDeaths = document.getElementById('stat-deaths')!;
-  const statTick = document.getElementById('stat-tick')!;
+  const statTime = document.getElementById('stat-time')!;
+
+  /** Convert simulation ticks to a time string (M:SS or H:MM:SS). 20 ticks = 1 sim-second. */
+  function ticksToTime(ticks: number): string {
+    const totalSeconds = Math.floor(ticks / 20);
+    const seconds = totalSeconds % 60;
+    const minutes = Math.floor(totalSeconds / 60) % 60;
+    const hours = Math.floor(totalSeconds / 3600);
+    const ss = String(seconds).padStart(2, '0');
+    if (hours > 0) {
+      return `${hours}:${String(minutes).padStart(2, '0')}:${ss}`;
+    }
+    return `${minutes}:${ss}`;
+  }
 
   // ── Stats updates ──
   events.on('stats:updated', (stats) => {
     statPop.textContent = String(stats.population);
     statBirths.textContent = String(stats.births);
     statDeaths.textContent = String(stats.deaths);
-    statTick.textContent = String(stats.tick);
+    statTime.textContent = ticksToTime(stats.tick);
   });
 
   // ── Speed controls ──
@@ -804,15 +828,21 @@ export function createUI(
     });
   });
 
-  // ── New Tank ──
+  // ── Flush (kill all organisms, keep tank/config) ──
+  document.getElementById('repsim-flush')!.addEventListener('click', () => {
+    engine.flush();
+    renderer.selectedOrganismId = null;
+    events.emit('organism:selected', { id: null });
+  });
+
+  // ── New Tank (full reset) ──
   document.getElementById('repsim-new-tank')!.addEventListener('click', () => {
     engine.reset();
     renderer.selectedOrganismId = null;
     renderer.selectedSourceType = null;
     renderer.selectedSourceId = null;
     renderer.setWallsDirty();
-    const orgInfoEl = document.getElementById('repsim-org-info')!;
-    orgInfoEl.innerHTML = renderOrganismInfo(undefined);
+    events.emit('organism:selected', { id: null });
     updateSourcePropsPanel(null, null);
   });
 
@@ -836,7 +866,9 @@ export function createUI(
     renderer.setTheme(currentTheme);
     engine.world.isLightTheme = currentTheme === 'light';
     // Swap icon: moon for dark, sun for light
-    themeBtn.innerHTML = currentTheme === 'dark' ? '&#9790;' : '&#9788;';
+    themeBtn.innerHTML = currentTheme === 'dark'
+      ? '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M21.64 13a1 1 0 00-1.05-.14 8.05 8.05 0 01-3.37.73A8.15 8.15 0 019.08 5.49a8.59 8.59 0 01.25-2 1 1 0 00-1.28-1.18A10 10 0 1021.93 14.12a1 1 0 00-.29-1.12z"/></svg>'
+      : '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><circle cx="12" cy="12" r="4"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 5.64l2.12-2.12"/></svg>';
   });
 
   // ── Panel toggle ──
@@ -859,6 +891,15 @@ export function createUI(
       chevron.classList.toggle('collapsed');
     });
   });
+
+  // ── Save & Share section (inserted after accordion setup to avoid double-toggle) ──
+  const saveShareSection = buildSaveShareSection(engine, tooltips);
+  const simSection = rightPanel.querySelector('[data-section="sim"]');
+  if (simSection) {
+    rightPanel.insertBefore(saveShareSection, simSection);
+  } else {
+    rightPanel.appendChild(saveShareSection);
+  }
 
   // ── Focus slider ──
   const focusSlider = document.getElementById('focus-slider') as HTMLInputElement;
@@ -991,16 +1032,30 @@ export function createUI(
   // ── Organism selection ──
   const orgInfoEl = document.getElementById('repsim-org-info')!;
 
+  // Share Genome button (persistent, shown when organism is selected)
+  const shareBtn = createShareButton(
+    engine,
+    () => renderer.selectedOrganismId,
+    tooltips,
+  );
+  shareBtn.style.display = 'none';
+  orgInfoEl.parentElement!.appendChild(shareBtn);
+
+  function updateOrgInfo(org: Organism | undefined): void {
+    orgInfoEl.innerHTML = renderOrganismInfo(org);
+    shareBtn.style.display = org?.alive ? '' : 'none';
+  }
+
   renderer.onOrganismSelected = (id: number | null) => {
     events.emit('organism:selected', { id });
   };
 
   events.on('organism:selected', (data) => {
     if (data.id === null) {
-      orgInfoEl.innerHTML = renderOrganismInfo(undefined);
+      updateOrgInfo(undefined);
     } else {
       const org = engine.world.organisms.get(data.id);
-      orgInfoEl.innerHTML = renderOrganismInfo(org);
+      updateOrgInfo(org);
     }
   });
 
@@ -1008,7 +1063,7 @@ export function createUI(
   events.on('stats:updated', () => {
     if (renderer.selectedOrganismId !== null) {
       const org = engine.world.organisms.get(renderer.selectedOrganismId);
-      orgInfoEl.innerHTML = renderOrganismInfo(org);
+      updateOrgInfo(org);
     }
   });
 
@@ -1108,4 +1163,85 @@ export function createUI(
       updateSourcePropsPanel(renderer.selectedSourceType, renderer.selectedSourceId);
     }
   });
+
+  // ── Attach tooltips to all interactive elements ──
+  if (tooltips) {
+    // Top bar stats
+    const statEls: Record<string, string> = {
+      'stat-pop': 'stat-pop',
+      'stat-births': 'stat-births',
+      'stat-deaths': 'stat-deaths',
+      'stat-time-wrap': 'stat-time',
+    };
+    for (const [id, key] of Object.entries(statEls)) {
+      const el = document.getElementById(id);
+      if (el) tooltips.attach(el, key);
+    }
+
+    // Tool icons
+    const toolKeys = ['tool-select', 'tool-tank', 'tool-light', 'tool-temp'];
+    topBar.querySelectorAll('#repsim-tool-icons .ui-btn-icon').forEach((btn, i) => {
+      if (toolKeys[i]) tooltips.attach(btn as HTMLElement, toolKeys[i]);
+    });
+
+    // Speed controls
+    speedButtons.forEach((btn) => {
+      const speed = btn.dataset.speed;
+      const key = speed === '0' ? 'speed-pause' : `speed-${speed}`;
+      tooltips.attach(btn, key);
+    });
+
+    // New Tank + Theme toggle
+    const newTank = document.getElementById('repsim-new-tank');
+    const flushBtn = document.getElementById('repsim-flush');
+    if (flushBtn) tooltips.attach(flushBtn, 'flush');
+    if (newTank) tooltips.attach(newTank, 'new-tank');
+    const themeBtn = document.getElementById('repsim-theme-toggle');
+    if (themeBtn) tooltips.attach(themeBtn, 'theme-toggle');
+
+    // Config sliders
+    rightPanel.querySelectorAll('.slider-row').forEach((row) => {
+      const input = row.querySelector<HTMLInputElement>('.config-slider');
+      if (input?.dataset.key) {
+        tooltips.attach(row as HTMLElement, `slider-${input.dataset.key}`);
+      }
+    });
+
+    // Virus controls
+    const virusSection = rightPanel.querySelector('[data-section="virus"]');
+    if (virusSection) {
+      const virusToggle = virusSection.querySelector('.toggle-wrap');
+      if (virusToggle) tooltips.attach(virusToggle as HTMLElement, 'virus-enabled');
+      virusSection.querySelectorAll('.slider-row').forEach((row) => {
+        const label = row.querySelector('.slider-label')?.textContent?.toLowerCase();
+        if (label?.includes('virulence')) tooltips.attach(row as HTMLElement, 'virus-virulence');
+        else if (label?.includes('transmit')) tooltips.attach(row as HTMLElement, 'virus-transmission');
+        else if (label?.includes('defense')) tooltips.attach(row as HTMLElement, 'virus-immunity');
+      });
+      const releaseBtn = virusSection.querySelector('.ui-btn');
+      if (releaseBtn) tooltips.attach(releaseBtn as HTMLElement, 'virus-release');
+    }
+
+    // Focus depth slider
+    const focusSlider = rightPanel.querySelector('[data-section="focus"] .config-slider');
+    if (focusSlider) tooltips.attach(focusSlider as HTMLElement, 'focus-slider');
+
+    // Tooltips ON/OFF toggle in Controls section
+    const controlsBody = rightPanel.querySelector('[data-body="controls"]');
+    if (controlsBody) {
+      const toggleRow = document.createElement('div');
+      toggleRow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:4px 0;margin-top:6px;';
+      toggleRow.innerHTML = `
+        <span style="font-size:11px;color:var(--ui-text-dim)">Tooltips</span>
+        <label class="toggle-wrap" style="cursor:pointer">
+          <input type="checkbox" ${tooltips.isEnabled() ? 'checked' : ''} style="display:none">
+          <span class="toggle-track"><span class="toggle-dot"></span></span>
+        </label>
+      `;
+      const checkbox = toggleRow.querySelector('input')!;
+      checkbox.addEventListener('change', () => tooltips.setEnabled(checkbox.checked));
+      controlsBody.appendChild(toggleRow);
+      tooltips.attach(toggleRow, 'tooltips-toggle');
+    }
+  }
 }

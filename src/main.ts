@@ -18,6 +18,10 @@ import { createEventBus } from './events';
 import { createSimulationEngine } from './simulation/engine';
 import { createRenderer } from './rendering/renderer';
 import { createUI } from './ui/ui';
+import { createTooltipSystem, injectTooltipStyles } from './ui/tooltips';
+import { createChartSystem, injectChartStyles } from './ui/charts';
+import { parseUrlParams, injectSaveShareStyles } from './ui/save-share';
+import { createTutorialSystem, createTutorialButton, autoStartTutorial, injectTutorialStyles } from './ui/tutorial';
 import { DEFAULT_CONFIG } from './constants';
 
 /**
@@ -44,10 +48,32 @@ async function main(): Promise<void> {
   const appDiv = document.getElementById('app')!;
   appDiv.appendChild(renderer.getCanvas());
 
-  // ── 5. UI Layer ──
-  createUI(engine, renderer, events);
+  // ── 5. Tooltip System ──
+  injectTooltipStyles();
+  const tooltips = createTooltipSystem();
 
-  // ── 6. Game Loop ──
+  // ── 6. UI Layer ──
+  createUI(engine, renderer, events, tooltips);
+
+  // ── 7. Charts (Left Panel) ──
+  injectChartStyles();
+  createChartSystem(engine, events, tooltips);
+
+  // ── 8. Save/Share System ──
+  injectSaveShareStyles();
+  await parseUrlParams(engine, renderer);
+
+  // ── 9. Tutorial System ──
+  injectTutorialStyles();
+  const tutorial = createTutorialSystem();
+  const tutorialBtn = createTutorialButton(tutorial);
+  // Insert ? button at rightmost position in top bar
+  const topRight = document.querySelector('.top-right')!;
+  topRight.appendChild(tutorialBtn);
+  tooltips.attach(tutorialBtn, 'tutorial-btn');
+  autoStartTutorial(tutorial);
+
+  // ── 10. Game Loop ──
   // requestAnimationFrame runs at screen refresh rate (typically 60fps).
   // Each frame we:
   //   a) Measure real elapsed time

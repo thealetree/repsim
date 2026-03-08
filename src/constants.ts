@@ -25,7 +25,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   blueHP: 1000,           // Extra HP per blue segment — doubles base segment health
   yellowFreq: 1.25,       // Seconds between movement — not too twitchy, not too sluggish
   redDamage: 400,         // Damage per attack — kills a normal segment in ~2.5 hits
-  purpleCost: 3500,       // Sexual repro cost — more expensive than asexual (3000)
+  purpleCost: 2500,       // Sexual repro cost per parent — total 5000 vs scaled asexual
   baseViscosity: 0.5,      // Default maps to VERLET_DAMPING (0.98)
 };
 
@@ -34,9 +34,40 @@ export const DEFAULT_CONFIG: SimConfig = {
 
 export const SEGMENT_RADIUS = 8;                // Visual radius of each segment circle (world units)
 export const SEGMENT_BASE_HEALTH = 1000;        // Starting HP for each segment
-export const ROOT_HEALTH_RESERVE_START = 4000;  // Starting HP pool for the organism
-export const ROOT_HEALTH_RESERVE_MAX = 5000;    // Max HP pool — photosynthesis stops filling here
-export const ROOT_DRAIN_AMOUNT = 70;            // HP lost by root every drain tick
+
+// ─── Size-Scaled Energy Economy ─────────────────────────────
+// Larger organisms get proportionally larger reserves but also higher costs,
+// so size is neutral at ~5 segments (V1 default). This removes the bias toward
+// shorter genomes — a 10-segment organism with good color mix is now viable.
+// Calibrated: f(5) ≈ original V1 flat values for backward compatibility.
+//
+// Original V1 flat values (for reference):
+//   ROOT_HEALTH_RESERVE_START = 4000
+//   ROOT_HEALTH_RESERVE_MAX   = 5000
+//   ROOT_DRAIN_AMOUNT         = 70
+//   ASEXUAL_REPRO_COST        = 3000
+//   REPRO_HEALTH_THRESHOLD    = 4990
+
+export function getMaxReserve(segCount: number): number {
+  return 2000 + 600 * segCount;  // f(5)=5000, f(2)=3200, f(10)=8000, f(15)=11000
+}
+export function getStartReserve(segCount: number): number {
+  return getMaxReserve(segCount) * 0.8;  // f(5)=4000, matches original ROOT_HEALTH_RESERVE_START
+}
+export function getRootDrain(segCount: number): number {
+  return 30 + 8 * segCount;  // f(5)=70, f(2)=46, f(10)=110, f(15)=150
+}
+export function getReproCost(segCount: number): number {
+  return 1000 + 400 * segCount;  // f(5)=3000, f(2)=1800, f(10)=5000, f(15)=7000
+}
+export function getReproThreshold(segCount: number): number {
+  return getMaxReserve(segCount) - 200;  // f(5)=4800, slightly more accessible than old 4990
+}
+
+// ─── Sexual Reproduction Bonuses ────────────────────────────
+export const SEXUAL_VIGOR_BONUS = 1.25;           // 25% extra starting HP for sexually-produced offspring
+export const SEXUAL_IMMUNITY_INHERIT_RATE = 0.75;  // 75% immunity inheritance (vs 50% asexual)
+
 export const ROOT_DRAIN_INTERVAL_TICKS = 22;    // ~1.1 seconds at 20 ticks/sec (V1: every 1.1s)
 export const REPLENISH_AMOUNT = 50;             // HP moved from root → damaged segment per tick
 export const REPLENISH_INTERVAL_TICKS = 15;     // ~0.75 seconds at 20 ticks/sec (V1: every 0.75s)
@@ -47,8 +78,8 @@ export const REPLENISH_INTERVAL_TICKS = 15;     // ~0.75 seconds at 20 ticks/sec
 export const REPRO_METER_MAX = 3001;            // Meter must reach this to trigger reproduction
 export const REPRO_METER_FILL = 100;            // Amount added per fill tick when healthy
 export const REPRO_METER_FILL_INTERVAL = 10;    // ~0.5 seconds at 20 ticks/sec
-export const REPRO_HEALTH_THRESHOLD = 4990;     // Root HP must be above this to fill repro meter
-export const ASEXUAL_REPRO_COST = 3000;         // HP cost to reproduce asexually
+// REPRO_HEALTH_THRESHOLD — now size-scaled via getReproThreshold()
+// ASEXUAL_REPRO_COST — now size-scaled via getReproCost()
 export const SEXUAL_REPRO_RANGE = 150;           // Root-to-root distance for mate finding (world units)
 export const STRUCTURAL_MUTATION_CHANCE = 0.15;  // 15% chance per child of gaining/losing a segment
 
@@ -376,3 +407,17 @@ export const VIRUS_DARK_RENDER_COLORS: Record<number, number> = {
   4: 0x12121e,  // Dark black (near background)
   5: 0x6a6a5a,  // Dark white/gray
 };
+
+
+// ─── Chart Constants ──────────────────────────────────────────
+export const CHART_SAMPLE_INTERVAL = 100;   // ticks between samples (~5 seconds of sim time)
+export const CHART_HISTORY_SIZE = 600;       // max samples stored (~50 minutes of data)
+export const CHART_PANEL_WIDTH = 240;        // left panel width in px
+export const CHART_HEIGHT = 80;              // individual chart canvas height in px
+
+// ─── Tooltip Constants ────────────────────────────────────────
+export const TOOLTIP_DELAY_MS = 800;         // hover delay before showing tooltip
+export const TOOLTIP_MAX_WIDTH = 200;        // max tooltip width in px
+
+// ─── Tutorial Constants ───────────────────────────────────────
+export const TUTORIAL_AUTO_DELAY_MS = 2000;  // delay before auto-starting on first visit

@@ -39,7 +39,6 @@ import {
   TANK_GRID_SPACING,
   COLLISION_PUSH_STRENGTH,
   ANGULAR_CONSTRAINT_STIFFNESS,
-  BLUR_LAYER_COUNT,
   MAX_SEGMENTS,
   VIRUS_JOINT_WOBBLE,
   PARALLAX_BOUNDARY_MARGIN,
@@ -51,6 +50,7 @@ import {
   querySpatialHash,
 } from '../spatial-hash';
 import { computeDamping } from '../environment';
+import { _orgDepthLayer } from './behaviors';
 
 const spatialHash = createSpatialHash();
 
@@ -59,9 +59,6 @@ const spatialHash = createSpatialHash();
 const _incomingAngle = new Float64Array(MAX_SEGMENTS);
 const _restX = new Float64Array(MAX_SEGMENTS);
 const _restY = new Float64Array(MAX_SEGMENTS);
-
-// Module-level reusable Map for depth layer lookups (avoids allocation per tick).
-const _orgDepthLayer = new Map<number, number>();
 
 
 // ─── Fast Numeric Tank Cell Lookup ──────────────────────────
@@ -213,7 +210,7 @@ export function enforceChainConstraints(world: World): void {
         const strain = world.virusStrains.strains[strainIdx];
         if (strain?.alive
           && seg.color[b] === strain.colorAffinity
-          && strain.effects.includes(VirusEffect.JointWeakness)) {
+          && (strain.effectsMask & (1 << VirusEffect.JointWeakness)) !== 0) {
           restDist *= 1 + Math.sin(world.tick * 0.15 + b * 0.7) * VIRUS_JOINT_WOBBLE;
         }
       }
@@ -345,16 +342,7 @@ export function resolveCollisions(world: World): void {
   const count = world.segmentCount;
   const minDist = SEGMENT_RADIUS * 2;
   const minDistSq = minDist * minDist;
-
-  // ── Pre-compute depth layer per organism (reuse module-level Map) ──
-  _orgDepthLayer.clear();
-  for (const org of world.organisms.values()) {
-    if (!org.alive) continue;
-    _orgDepthLayer.set(org.id, Math.min(
-      BLUR_LAYER_COUNT - 1,
-      Math.floor(org.depth * BLUR_LAYER_COUNT),
-    ));
-  }
+  // Depth layers already computed at start of runBehaviors via computeDepthLayers()
 
   clearSpatialHash(spatialHash);
   for (let i = 0; i < count; i++) {

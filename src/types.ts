@@ -58,9 +58,17 @@ export interface ViralStrain {
   virulence: number;             // 0-1, how aggressively it drains HP
   transmissionRate: number;      // 0-1, chance to spread on collision
   effects: VirusEffect[];        // 1-2 effects rolled at strain creation
+  effectsMask: number;           // Bitmask of effects (1 << effect) for O(1) hot-path checks
   parentStrainId: number;        // -1 for spontaneous origin
   alive: boolean;                // For pool reuse
   hostCount: number;             // Number of currently infected segments
+}
+
+/** Convert effects array to a bitmask for fast hot-path checks. */
+export function effectsToMask(effects: VirusEffect[]): number {
+  let mask = 0;
+  for (const e of effects) mask |= (1 << e);
+  return mask;
 }
 
 export interface VirusStrainPool {
@@ -177,6 +185,9 @@ export interface Organism {
   // Photosynthesis fills this, root drain depletes it
   rootHealthReserve: number;
 
+  // Size-scaled max HP reserve (from getMaxReserve at spawn)
+  rootHealthReserveMax: number;
+
   // Fills up when healthy; triggers reproduction when full
   reproMeter: number;
 
@@ -223,6 +234,10 @@ export interface Organism {
   // Precomputed tree topology — children lists, leaf flags, depths
   // Built once at spawn time from the genome's parent references.
   topology: GenomeTopology;
+
+  // Species fingerprint — hash of genome structure, computed once at spawn.
+  // Used by charts for O(1) species diversity counting instead of per-sample recomputation.
+  fingerprint: string;
 }
 
 
@@ -366,4 +381,43 @@ export interface Camera {
   zoom: number;    // Zoom level (1 = default, >1 = zoomed in)
   minZoom: number;
   maxZoom: number;
+}
+
+
+// ─── Chart Data ─────────────────────────────────────────────
+
+/** One data point sampled every CHART_SAMPLE_INTERVAL ticks */
+export interface ChartSample {
+  tick: number;
+  population: number;
+  births: number;              // cumulative
+  deaths: number;              // cumulative
+  colorCounts: number[];       // [green, blue, yellow, red, black, white] segment totals
+  avgGenomeLength: number;
+  maxGeneration: number;
+  avgGeneration: number;
+  speciesCount: number;        // unique genome fingerprints alive
+  aliveStrains: number;        // number of active virus strains
+  totalInfected: number;       // number of infected organisms
+}
+
+
+// ─── Save/Share Payloads ────────────────────────────────────
+
+/** Payload for sharing a single organism via URL (?o=) */
+export interface OrganismPayload {
+  v: 1;                        // version for backward compat
+  g: Gene[];                   // genome
+  gen: number;                 // generation
+  n: string;                   // name
+}
+
+/** Payload for sharing a tank configuration via URL (?t=) */
+export interface TankPayload {
+  v: 1;
+  tank: [number, number][];          // [col, row] pairs (always included)
+  lights?: LightSource[];             // optional
+  temps?: TemperatureSource[];        // optional
+  config?: Partial<SimConfig>;        // optional (only non-default values)
+  orgs?: OrganismPayload[];           // optional
 }

@@ -37,8 +37,8 @@ import {
   REPRO_METER_MAX,
   REPRO_METER_FILL,
   REPRO_METER_FILL_INTERVAL,
-  REPRO_HEALTH_THRESHOLD,
-  ASEXUAL_REPRO_COST,
+  getReproThreshold,
+  getReproCost,
   SEXUAL_REPRO_RANGE,
   STRUCTURAL_MUTATION_CHANCE,
   MIN_SEGMENTS,
@@ -46,6 +46,8 @@ import {
   LENGTH_MUTATION_DRIFT,
   GENE_LENGTH_MIN,
   GENE_LENGTH_MAX,
+  SEXUAL_VIGOR_BONUS,
+  SEXUAL_IMMUNITY_INHERIT_RATE,
   VIRUS_VERTICAL_TRANSMISSION_CHANCE,
   VIRUS_IMMUNITY_INHERITANCE_CHANCE,
   VIRUS_BLOOM_CHANCE,
@@ -90,7 +92,7 @@ export function runReproduction(world: World, config: SimConfig): void {
   for (const org of world.organisms.values()) {
     if (!org.alive) continue;
 
-    if (org.rootHealthReserve > REPRO_HEALTH_THRESHOLD && org.reproMeter < REPRO_METER_MAX) {
+    if (org.rootHealthReserve > getReproThreshold(org.genome.length) && org.reproMeter < REPRO_METER_MAX) {
       org.reproMeter += REPRO_METER_FILL;
     }
   }
@@ -151,10 +153,11 @@ export function runReproduction(world: World, config: SimConfig): void {
  * Cost: 3000 HP. Simpler and cheaper than sexual, but less genetic diversity.
  */
 function reproduceAsexually(world: World, parent: Organism, config: SimConfig): void {
-  // HP cost check (shouldn't fail since meter filled only when healthy, but safety check)
-  if (parent.rootHealthReserve < ASEXUAL_REPRO_COST) return;
+  // HP cost check — scaled by organism size
+  const cost = getReproCost(parent.genome.length);
+  if (parent.rootHealthReserve < cost) return;
 
-  parent.rootHealthReserve -= ASEXUAL_REPRO_COST;
+  parent.rootHealthReserve -= cost;
   parent.reproMeter = 0;
 
   // Spawn near parent (random offset 30-60 units from root)
@@ -196,7 +199,7 @@ function reproduceAsexually(world: World, parent: Organism, config: SimConfig): 
     // Virus: vertical transmission + immunity inheritance
     if (config.virusEnabled) {
       transmitVirusVertically(world, parent, child);
-      inheritImmunity(parent, child);
+      inheritImmunity(parent, child, VIRUS_IMMUNITY_INHERITANCE_CHANCE);
     }
 
     parent.childCount++;
@@ -278,11 +281,18 @@ function reproduceSexually(
       childSeg.segmentDepth[child.firstSegment + s] = child.depth;
     }
 
+    // Hybrid vigor: sexually-produced offspring start with bonus HP
+    child.rootHealthReserve = Math.min(
+      child.rootHealthReserve * SEXUAL_VIGOR_BONUS,
+      child.rootHealthReserveMax,
+    );
+
     // Virus: vertical transmission from dominant parent + immunity from both
+    // Sexual offspring inherit immunity at higher rate (75% vs 50% asexual)
     if (config.virusEnabled) {
       transmitVirusVertically(world, dominant, child);
-      inheritImmunity(dominant, child);
-      inheritImmunity(recessive, child);
+      inheritImmunity(dominant, child, SEXUAL_IMMUNITY_INHERIT_RATE);
+      inheritImmunity(recessive, child, SEXUAL_IMMUNITY_INHERIT_RATE);
     }
 
     parent1.childCount++;
@@ -568,9 +578,9 @@ function transmitVirusVertically(world: World, parent: Organism, child: Organism
 /**
  * Immunity inheritance: child has 50% chance to inherit each immunity from parent.
  */
-function inheritImmunity(parent: Organism, child: Organism): void {
+function inheritImmunity(parent: Organism, child: Organism, rate: number): void {
   for (const strainId of parent.immuneTo) {
-    if (Math.random() < VIRUS_IMMUNITY_INHERITANCE_CHANCE) {
+    if (Math.random() < rate) {
       child.immuneTo.add(strainId);
     }
   }
@@ -605,7 +615,7 @@ function tryViralBloom(
 
     const strainIdx = seg.virusStrainId[idx] - 1;
     const strain = world.virusStrains.strains[strainIdx];
-    if (strain?.alive && strain.effects.includes(VirusEffect.ReproductionHijack)) {
+    if (strain?.alive && (strain.effectsMask & (1 << VirusEffect.ReproductionHijack)) !== 0) {
       hijackStrainIdx = strainIdx;
       break;
     }

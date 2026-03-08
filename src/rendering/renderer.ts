@@ -869,7 +869,7 @@ export async function createRenderer(width: number, height: number): Promise<Ren
 
           // Virus: infected organisms → ALL segments use dark texture of strain's target color
           let isInfected = false;
-          let virusStrain: { colorAffinity: number; effects: number[]; alive: boolean } | null = null;
+          let virusStrain: { colorAffinity: number; effects: number[]; effectsMask: number; alive: boolean } | null = null;
           if (seg.virusStrainId[idx] > 0) {
             const si = seg.virusStrainId[idx] - 1;
             const s = world.virusStrains.strains[si];
@@ -925,7 +925,7 @@ export async function createRenderer(width: number, height: number): Promise<Ren
           // Virus: Swelling only on segments matching strain's color affinity
           if (isInfected && virusStrain
             && colorKey === virusStrain.colorAffinity
-            && virusStrain.effects.includes(VirusEffect.Swelling)) {
+            && (virusStrain.effectsMask & (1 << VirusEffect.Swelling)) !== 0) {
             uniformScale *= VIRUS_SWELLING_FACTOR;
           }
 
