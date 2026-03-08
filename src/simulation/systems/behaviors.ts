@@ -37,6 +37,8 @@ import {
   RED_ATTACK_RANGE,
   RED_ATTACK_COOLDOWN_TICKS,
   RED_ATTACK_HP_GAIN_FRACTION,
+  RED_KILL_BONUS,
+  AMBIENT_LIGHT_FLOOR,
   BLUR_LAYER_COUNT,
   SIM_TICKS_PER_SECOND,
   SEGMENT_DEPTH_FOLLOW_RATE,
@@ -169,6 +171,9 @@ function runPhotosynthesis(world: World, config: SimConfig): void {
           // Light mode: invert — ambient is 1.0, shadow sources reduce it
           light = Math.max(0, 1 - light);
         }
+
+        // Ambient floor: greens in total darkness still earn 15% of normal
+        light = Math.max(AMBIENT_LIGHT_FLOOR, light);
 
         const lengthMult = org.genome[i]?.length || 1;
         totalLightFeed += Math.min(1, light) * lengthMult;
@@ -450,6 +455,11 @@ function runRedAttack(world: World, config: SimConfig): void {
         // DEAL DAMAGE (scaled by length — longer = stronger)
         const damage = config.redDamage * lengthMult;
         seg.health[j] -= damage;
+
+        // Kill bonus: finishing a segment is rewarded
+        if (seg.health[j] <= 0) {
+          org.rootHealthReserve += RED_KILL_BONUS;
+        }
 
         // Attacker gains HP (predator-prey reward)
         org.rootHealthReserve += damage * RED_ATTACK_HP_GAIN_FRACTION;

@@ -61,7 +61,7 @@ export function getReproCost(segCount: number): number {
   return 1000 + 400 * segCount;  // f(5)=3000, f(2)=1800, f(10)=5000, f(15)=7000
 }
 export function getReproThreshold(segCount: number): number {
-  return getMaxReserve(segCount) - 200;  // f(5)=4800, slightly more accessible than old 4990
+  return Math.floor(getMaxReserve(segCount) * 0.92);  // 92% of max — proportional for all sizes
 }
 
 // ─── Sexual Reproduction Bonuses ────────────────────────────
@@ -184,8 +184,9 @@ export const YELLOW_DEPTH_IMPULSE = 0.03;        // Depth change per yellow from
 // bump into each other will trigger combat.
 
 export const RED_ATTACK_RANGE = SEGMENT_RADIUS * 3;       // Proximity for attack
-export const RED_ATTACK_COOLDOWN_TICKS = 20;               // 1s between attacks per organism
-export const RED_ATTACK_HP_GAIN_FRACTION = 0.5;            // Attacker gains 50% of damage as HP
+export const RED_ATTACK_COOLDOWN_TICKS = 15;               // 0.75s between attacks per organism
+export const RED_ATTACK_HP_GAIN_FRACTION = 0.75;           // Attacker gains 75% of damage as HP
+export const RED_KILL_BONUS = 300;                          // Bonus HP for finishing a kill
 
 
 // ─── Physics Constants ───────────────────────────────────────
@@ -321,6 +322,7 @@ export const MAX_ADJACENT_DEPTH_DIFF = 1 / BLUR_LAYER_COUNT; // Max depth diff b
 
 
 // ─── Environment Constants ──────────────────────────────────
+export const AMBIENT_LIGHT_FLOOR = 0.15;                    // Min light for greens in darkness (15% of full)
 export const MAX_LIGHT_SOURCES = 5;
 export const MAX_TEMPERATURE_SOURCES = 5;
 
