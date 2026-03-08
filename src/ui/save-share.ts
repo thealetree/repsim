@@ -135,10 +135,16 @@ async function generateTankURL(payload: TankPayload): Promise<string | null> {
 
 // ─── Clipboard Helper ────────────────────────────────────────
 
-function copyToClipboard(text: string): void {
-  // Use textarea + execCommand as primary method.
-  // navigator.clipboard.writeText requires a fresh user gesture in the same
-  // call stack, but our compress() is async and breaks that chain on macOS.
+async function copyToClipboard(text: string): Promise<void> {
+  // navigator.clipboard.writeText works in async contexts on HTTPS
+  // (transient user activation persists ~5s, well beyond compress() time).
+  // execCommand('copy') is the sync fallback for HTTP/older browsers.
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch { /* fall through to execCommand */ }
+  }
   const ta = document.createElement('textarea');
   ta.value = text;
   ta.style.cssText = 'position:fixed;left:-9999px;top:0;';
@@ -358,7 +364,7 @@ export function buildSaveShareSection(
     );
     const url = await generateTankURL(payload);
     if (url) {
-      copyToClipboard(url);
+      await copyToClipboard(url);
       const orig = copyBtn.textContent;
       copyBtn.textContent = 'Copied!';
       setTimeout(() => { copyBtn.textContent = orig; }, 1200);
@@ -432,7 +438,7 @@ export function createShareButton(
     const payload = serializeOrganism(org.genome, org.generation, org.name);
     const url = await generateOrganismURL(payload);
     if (url) {
-      copyToClipboard(url);
+      await copyToClipboard(url);
       const orig = btn.textContent;
       btn.textContent = 'Copied!';
       setTimeout(() => { btn.textContent = orig; }, 1200);
