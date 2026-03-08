@@ -620,14 +620,7 @@ export async function createRenderer(width: number, height: number): Promise<Ren
 
   // ── Touch Input (mobile) ──
   const touchCleanup = setupTouchInput(canvas, camera, {
-    selectClick: handleSelectClick,
-    tankClick: handleTankClick,
-    lightClick: handleLightClick,
-    temperatureClick: handleTemperatureClick,
-    currentClick: handleCurrentClick,
-    screenToWorld,
     getScreenDimensions: () => ({ width: screenWidth, height: screenHeight }),
-    getToolMode: () => toolMode,
   });
 
   // ── The Renderer Object ──

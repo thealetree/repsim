@@ -1,57 +1,46 @@
 /**
  * touch.ts — Touch gesture handler for mobile Repsim V2
  *
- * Translates touch gestures into camera and tool operations:
- * - Single finger drag = pan
- * - Single finger tap = tool dispatch (select, place source, etc.)
+ * Translates touch gestures into camera and mouse operations:
+ * - Single finger = left mouse (click, drag, select, place sources, paint walls)
  * - Two finger pinch = zoom (toward midpoint)
- * - Two finger pan = simultaneous pan while pinching
+ * - Two finger pan = camera pan
+ *
+ * Single-finger touches synthesize MouseEvents so all existing mouse-based
+ * interactions in the renderer work without any changes.
  */
 
 import type { Camera } from '../types';
 import { panCamera, zoomCameraTo } from '../rendering/camera';
-import { ToolMode } from '../types';
 
 // ─── Types ───────────────────────────────────────────────────
 
-export interface ToolDispatch {
-  selectClick(wx: number, wy: number): void;
-  tankClick(clientX: number, clientY: number): void;
-  lightClick(wx: number, wy: number): void;
-  temperatureClick(wx: number, wy: number): void;
-  currentClick(wx: number, wy: number): void;
-  screenToWorld(sx: number, sy: number): { wx: number; wy: number };
+export interface TouchDispatch {
   getScreenDimensions(): { width: number; height: number };
-  getToolMode(): number;
 }
-
-// ─── Constants ───────────────────────────────────────────────
-
-const TAP_MAX_DISTANCE = 10;   // px — if finger moves more, it becomes a pan
-const TAP_MAX_DURATION = 300;  // ms
 
 // ─── Setup ───────────────────────────────────────────────────
 
 export function setupTouchInput(
   canvas: HTMLCanvasElement,
   camera: Camera,
-  dispatch: ToolDispatch,
+  dispatch: TouchDispatch,
 ): { destroy(): void } {
 
-  type GestureState = 'none' | 'tap-pending' | 'pan' | 'pinch';
+  type GestureState = 'none' | 'single' | 'pinch';
   let gestureState: GestureState = 'none';
 
   // Single-finger tracking
-  let tapStartTime = 0;
-  let tapStartX = 0;
-  let tapStartY = 0;
   let lastTouchX = 0;
   let lastTouchY = 0;
+  let mouseIsDown = false;
 
   // Two-finger tracking
   let lastPinchDist = 0;
   let lastMidX = 0;
   let lastMidY = 0;
+
+  // ─── Helpers ──────────────────────────────────────────────
 
   function getTouchDistance(t1: Touch, t2: Touch): number {
     const dx = t1.clientX - t2.clientX;
@@ -77,28 +66,26 @@ export function setupTouchInput(
     };
   }
 
-  function dispatchToolTap(clientX: number, clientY: number): void {
-    const { sx, sy } = clientToScreen(clientX, clientY);
-    const { wx, wy } = dispatch.screenToWorld(sx, sy);
-    const mode = dispatch.getToolMode();
-
-    switch (mode) {
-      case ToolMode.Select:
-        dispatch.selectClick(wx, wy);
-        break;
-      case ToolMode.Tank:
-        dispatch.tankClick(clientX, clientY);
-        break;
-      case ToolMode.Light:
-        dispatch.lightClick(wx, wy);
-        break;
-      case ToolMode.Temperature:
-        dispatch.temperatureClick(wx, wy);
-        break;
-      case ToolMode.Current:
-        dispatch.currentClick(wx, wy);
-        break;
-    }
+  /** Synthesize a MouseEvent so existing renderer mouse handlers fire */
+  function fireMouseEvent(
+    type: string,
+    clientX: number,
+    clientY: number,
+    target: EventTarget = canvas,
+  ): void {
+    const isUpOrClick = type === 'mouseup' || type === 'click';
+    const event = new MouseEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX,
+      clientY,
+      screenX: clientX,
+      screenY: clientY,
+      button: 0,
+      buttons: isUpOrClick ? 0 : 1,
+    });
+    target.dispatchEvent(event);
   }
 
   // ─── Event Handlers ──────────────────────────────────────
@@ -106,16 +93,22 @@ export function setupTouchInput(
   function onTouchStart(e: TouchEvent): void {
     e.preventDefault();
 
-    if (e.touches.length === 1) {
+    if (e.touches.length === 1 && gestureState === 'none') {
+      // Single finger → act as left mouse button
       const t = e.touches[0];
-      tapStartTime = performance.now();
-      tapStartX = t.clientX;
-      tapStartY = t.clientY;
+      gestureState = 'single';
       lastTouchX = t.clientX;
       lastTouchY = t.clientY;
-      gestureState = 'tap-pending';
+      mouseIsDown = true;
+      fireMouseEvent('mousedown', t.clientX, t.clientY);
+
     } else if (e.touches.length === 2) {
-      // Switch to pinch
+      // Cancel any in-progress mouse interaction before starting pinch
+      if (mouseIsDown) {
+        fireMouseEvent('mouseup', lastTouchX, lastTouchY);
+        mouseIsDown = false;
+      }
+      // Switch to pinch/pan
       const dist = getTouchDistance(e.touches[0], e.touches[1]);
       const mid = getTouchMidpoint(e.touches[0], e.touches[1]);
       lastPinchDist = dist;
@@ -128,24 +121,10 @@ export function setupTouchInput(
   function onTouchMove(e: TouchEvent): void {
     e.preventDefault();
 
-    if (e.touches.length === 1 && gestureState !== 'pinch') {
+    if (e.touches.length === 1 && gestureState === 'single') {
+      // Single finger drag → synthesize mousemove
       const t = e.touches[0];
-      const dx = t.clientX - tapStartX;
-      const dy = t.clientY - tapStartY;
-
-      if (gestureState === 'tap-pending') {
-        // Check if we've moved enough to become a pan
-        if (Math.sqrt(dx * dx + dy * dy) > TAP_MAX_DISTANCE) {
-          gestureState = 'pan';
-        }
-      }
-
-      if (gestureState === 'pan') {
-        const moveDx = t.clientX - lastTouchX;
-        const moveDy = t.clientY - lastTouchY;
-        panCamera(camera, moveDx, moveDy);
-      }
-
+      fireMouseEvent('mousemove', t.clientX, t.clientY);
       lastTouchX = t.clientX;
       lastTouchY = t.clientY;
 
@@ -154,7 +133,7 @@ export function setupTouchInput(
       const mid = getTouchMidpoint(e.touches[0], e.touches[1]);
       const dims = dispatch.getScreenDimensions();
 
-      // Proportional zoom: new zoom = start zoom * (current distance / start distance)
+      // Proportional zoom toward midpoint
       if (lastPinchDist > 0) {
         const scale = dist / lastPinchDist;
         const newZoom = camera.zoom * scale;
@@ -178,26 +157,32 @@ export function setupTouchInput(
   function onTouchEnd(e: TouchEvent): void {
     e.preventDefault();
 
-    if (gestureState === 'tap-pending') {
-      const elapsed = performance.now() - tapStartTime;
-      if (elapsed < TAP_MAX_DURATION) {
-        dispatchToolTap(tapStartX, tapStartY);
+    if (gestureState === 'single' && e.touches.length === 0) {
+      // Finger lifted → mouseup + click
+      if (mouseIsDown) {
+        fireMouseEvent('mouseup', lastTouchX, lastTouchY);
+        fireMouseEvent('click', lastTouchX, lastTouchY);
+        mouseIsDown = false;
       }
-    }
-
-    if (e.touches.length === 1 && gestureState === 'pinch') {
-      // One finger lifted during pinch — transition to pan with remaining finger
-      const t = e.touches[0];
-      lastTouchX = t.clientX;
-      lastTouchY = t.clientY;
-      gestureState = 'pan';
-    } else if (e.touches.length === 0) {
       gestureState = 'none';
+
+    } else if (gestureState === 'pinch') {
+      if (e.touches.length === 0) {
+        // Both fingers lifted — done
+        gestureState = 'none';
+      }
+      // If one finger remains after pinch, stay in pinch state
+      // to avoid accidental clicks at the end of a zoom gesture.
+      // User must lift all fingers and start fresh.
     }
   }
 
   function onTouchCancel(e: TouchEvent): void {
     e.preventDefault();
+    if (mouseIsDown) {
+      fireMouseEvent('mouseup', lastTouchX, lastTouchY);
+      mouseIsDown = false;
+    }
     gestureState = 'none';
   }
 
