@@ -22,7 +22,7 @@ import {
   DEFAULT_CONFIG,
 } from '../constants';
 import { createSpontaneousStrain, infectSegment } from '../simulation/virus';
-import { buildSaveShareSection, createShareButton } from './save-share';
+import { buildSaveShareSection, createShareButton, createSpawnInput } from './save-share';
 
 // ─── Color names for display ──────────────────────────────────
 const COLOR_NAMES: Record<number, string> = {
@@ -895,7 +895,7 @@ export function createUI(
   });
 
   // ── Save & Share section (inserted after accordion setup to avoid double-toggle) ──
-  const saveShareSection = buildSaveShareSection(engine, tooltips);
+  const saveShareSection = buildSaveShareSection(engine, renderer, tooltips);
   const simSection = rightPanel.querySelector('[data-section="sim"]');
   if (simSection) {
     rightPanel.insertBefore(saveShareSection, simSection);
@@ -1048,6 +1048,10 @@ export function createUI(
   );
   shareBtn.style.display = 'none';
   orgInfoEl.parentElement!.appendChild(shareBtn);
+
+  // Spawn from URL input (always visible in organism section)
+  const spawnInput = createSpawnInput(engine);
+  orgInfoEl.parentElement!.appendChild(spawnInput);
 
   function updateOrgInfo(org: Organism | undefined): void {
     orgInfoEl.innerHTML = renderOrganismInfo(org);

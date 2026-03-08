@@ -972,13 +972,13 @@ export async function createRenderer(width: number, height: number): Promise<Ren
             + (DEPTH_ALPHA_MAX - DEPTH_ALPHA_MIN) * foodSharpness;
 
           // Decay fade: fade out over last 20% of lifetime
-          const age = world.tick - food.spawnTick[fi];
-          const decayFade = age > FOOD_DECAY_TICKS * 0.8
-            ? 1 - (age - FOOD_DECAY_TICKS * 0.8) / (FOOD_DECAY_TICKS * 0.2)
-            : 1;
-
           const viralVal = food.isViral[fi]; // 0 = normal, 1-6 = viral color + 1
           const isViral = viralVal > 0;
+          const lifetime = isViral ? FOOD_DECAY_TICKS >> 1 : FOOD_DECAY_TICKS;
+          const age = world.tick - food.spawnTick[fi];
+          const decayFade = age > lifetime * 0.8
+            ? 1 - (age - lifetime * 0.8) / (lifetime * 0.2)
+            : 1;
           let alpha = foodAlpha * decayFade * 0.8;
 
           // Viral food: subtle pulsing glow

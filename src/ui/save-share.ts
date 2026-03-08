@@ -78,7 +78,6 @@ function serializeTank(
   includeLights: boolean,
   includeTemps: boolean,
   includeConfig: boolean,
-  includeOrgs: boolean,
 ): TankPayload {
   const world = engine.world;
 
@@ -111,14 +110,6 @@ function serializeTank(
     if (Object.keys(cfg).length > 0) payload.config = cfg;
   }
 
-  if (includeOrgs) {
-    payload.orgs = [];
-    for (const org of world.organisms.values()) {
-      if (!org.alive) continue;
-      payload.orgs.push(serializeOrganism(org.genome, org.generation, org.name));
-    }
-  }
-
   return payload;
 }
 
@@ -144,19 +135,18 @@ async function generateTankURL(payload: TankPayload): Promise<string | null> {
 
 // ─── Clipboard Helper ────────────────────────────────────────
 
-async function copyToClipboard(text: string): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    // Fallback for non-secure contexts or denied permissions
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.cssText = 'position:fixed;left:-9999px;';
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    ta.remove();
-  }
+function copyToClipboard(text: string): void {
+  // Use textarea + execCommand as primary method.
+  // navigator.clipboard.writeText requires a fresh user gesture in the same
+  // call stack, but our compress() is async and breaks that chain on macOS.
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;left:-9999px;top:0;';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  document.execCommand('copy');
+  ta.remove();
 }
 
 // ─── Apply Loaded Data ───────────────────────────────────────
@@ -278,6 +268,7 @@ function showToast(message: string): void {
 
 export function buildSaveShareSection(
   engine: SimulationEngine,
+  renderer: Renderer,
   tooltips?: TooltipSystem,
 ): HTMLElement {
   const section = document.createElement('div');
@@ -302,7 +293,6 @@ export function buildSaveShareSection(
     { id: 'share-lights', label: 'Light Sources', checked: false, disabled: false },
     { id: 'share-temps', label: 'Temperature', checked: false, disabled: false },
     { id: 'share-config', label: 'Sim Config', checked: false, disabled: false },
-    { id: 'share-orgs', label: 'All Organisms', checked: false, disabled: false },
   ];
 
   const checkboxes: Record<string, HTMLInputElement> = {};
@@ -334,6 +324,24 @@ export function buildSaveShareSection(
   if (tooltips) tooltips.attach(copyBtn, 'share-copy-url');
   body.appendChild(copyBtn);
 
+  // ── Load URL input ──
+  const loadContainer = document.createElement('div');
+  loadContainer.style.cssText = 'margin-top:8px;display:flex;gap:4px;';
+
+  const loadInput = document.createElement('input');
+  loadInput.type = 'text';
+  loadInput.placeholder = 'Paste shared URL…';
+  loadInput.style.cssText = 'flex:1;min-width:0;font-family:var(--ui-font);font-size:10px;padding:4px 6px;background:var(--ui-surface);border:1px solid var(--ui-border);border-radius:4px;color:var(--ui-text);outline:none;';
+
+  const loadBtn = document.createElement('button');
+  loadBtn.className = 'ui-btn';
+  loadBtn.textContent = 'Load';
+  loadBtn.style.cssText = 'font-size:10px;padding:4px 10px;flex-shrink:0;';
+
+  loadContainer.appendChild(loadInput);
+  loadContainer.appendChild(loadBtn);
+  body.appendChild(loadContainer);
+
   // Accordion toggle
   header.addEventListener('click', () => {
     const isCollapsed = body.classList.toggle('collapsed');
@@ -347,18 +355,54 @@ export function buildSaveShareSection(
       checkboxes['share-lights'].checked,
       checkboxes['share-temps'].checked,
       checkboxes['share-config'].checked,
-      checkboxes['share-orgs'].checked,
     );
     const url = await generateTankURL(payload);
     if (url) {
-      await copyToClipboard(url);
+      copyToClipboard(url);
       const orig = copyBtn.textContent;
       copyBtn.textContent = 'Copied!';
       setTimeout(() => { copyBtn.textContent = orig; }, 1200);
       showToast('URL copied to clipboard!');
     } else {
-      showToast('Too many organisms for URL — uncheck "All Organisms"');
+      showToast('Tank too large to share via URL');
     }
+  });
+
+  // Load URL handler
+  async function loadFromURL(): Promise<void> {
+    const raw = loadInput.value.trim();
+    if (!raw) return;
+    try {
+      const url = new URL(raw);
+      const params = new URLSearchParams(url.search);
+
+      if (params.has('o')) {
+        const json = await decompress(params.get('o')!);
+        const payload = JSON.parse(json) as OrganismPayload;
+        if (payload.v === 1 && payload.g) {
+          applyOrganismPayload(engine, payload);
+          showToast(`Loaded organism: ${payload.n}`);
+        }
+      } else if (params.has('t')) {
+        const json = await decompress(params.get('t')!);
+        const payload = JSON.parse(json) as TankPayload;
+        if (payload.v === 1 && payload.tank) {
+          applyTankPayload(engine, payload);
+          renderer.setWallsDirty();
+          showToast(`Loaded tank (${payload.tank.length} cells)`);
+        }
+      } else {
+        showToast('URL has no shared data (?o= or ?t=)');
+      }
+      loadInput.value = '';
+    } catch {
+      showToast('Invalid URL — paste a Repsim share link');
+    }
+  }
+
+  loadBtn.addEventListener('click', loadFromURL);
+  loadInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') loadFromURL();
   });
 
   section.appendChild(header);
@@ -388,7 +432,7 @@ export function createShareButton(
     const payload = serializeOrganism(org.genome, org.generation, org.name);
     const url = await generateOrganismURL(payload);
     if (url) {
-      await copyToClipboard(url);
+      copyToClipboard(url);
       const orig = btn.textContent;
       btn.textContent = 'Copied!';
       setTimeout(() => { btn.textContent = orig; }, 1200);
@@ -399,6 +443,54 @@ export function createShareButton(
   });
 
   return btn;
+}
+
+// ─── Organism Spawn Input ────────────────────────────────────
+
+export function createSpawnInput(engine: SimulationEngine): HTMLElement {
+  const container = document.createElement('div');
+  container.style.cssText = 'margin-top:6px;display:flex;gap:4px;';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'Paste genome URL…';
+  input.style.cssText = 'flex:1;min-width:0;font-family:var(--ui-font);font-size:10px;padding:4px 6px;background:var(--ui-surface);border:1px solid var(--ui-border);border-radius:4px;color:var(--ui-text);outline:none;';
+
+  const spawnBtn = document.createElement('button');
+  spawnBtn.className = 'ui-btn';
+  spawnBtn.textContent = 'Spawn';
+  spawnBtn.style.cssText = 'font-size:10px;padding:4px 10px;flex-shrink:0;';
+
+  container.appendChild(input);
+  container.appendChild(spawnBtn);
+
+  async function spawnFromURL(): Promise<void> {
+    const raw = input.value.trim();
+    if (!raw) return;
+    try {
+      const url = new URL(raw);
+      const params = new URLSearchParams(url.search);
+      if (params.has('o')) {
+        const json = await decompress(params.get('o')!);
+        const payload = JSON.parse(json) as OrganismPayload;
+        if (payload.v === 1 && payload.g) {
+          applyOrganismPayload(engine, payload);
+          showToast(`Spawned: ${payload.n}`);
+        }
+      } else {
+        showToast('Not an organism URL (needs ?o=)');
+      }
+    } catch {
+      showToast('Invalid URL — paste a genome share link');
+    }
+  }
+
+  spawnBtn.addEventListener('click', spawnFromURL);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') spawnFromURL();
+  });
+
+  return container;
 }
 
 // ─── CSS ─────────────────────────────────────────────────────

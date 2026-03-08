@@ -116,8 +116,9 @@ export function updateFood(food: FoodParticles, tick: number, tankCells: Set<str
   for (let i = 0; i < FOOD_MAX_PARTICLES; i++) {
     if (!food.alive[i]) continue;
 
-    // Decay check
-    if (tick - food.spawnTick[i] >= FOOD_DECAY_TICKS) {
+    // Decay check — viral food decays in half the time
+    const decayLimit = food.isViral[i] ? FOOD_DECAY_TICKS >> 1 : FOOD_DECAY_TICKS;
+    if (tick - food.spawnTick[i] >= decayLimit) {
       food.alive[i] = 0;
       food.freeSlots.push(i);
       food.count--;
