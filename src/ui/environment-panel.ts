@@ -201,6 +201,21 @@ export function injectEnvironmentPanelStyles(): void {
       height: 100%;
       background: var(--ui-accent);
       border-radius: 3px;
+    }
+    .daynight-controls.disabled {
+      opacity: 0.35;
+      pointer-events: none;
+    }
+    .daynight-disabled-msg {
+      font-size: 9px;
+      color: var(--ui-text-muted);
+      font-style: italic;
+      white-space: normal;
+      line-height: 1.4;
+      display: none;
+    }
+    .daynight-controls.disabled + .daynight-disabled-msg {
+      display: block;
       transition: width 0.1s;
     }
 
@@ -280,26 +295,34 @@ export function createEnvironmentPanel(
           <input type="range" id="env-viscosity" min="0" max="1" step="0.05" value="${(1 - engine.config.baseViscosity).toFixed(2)}">
           <span class="env-slider-val" id="env-viscosity-val">${(1 - engine.config.baseViscosity).toFixed(2)}</span>
         </div>
+        <div class="env-slider-row">
+          <span class="env-slider-label">Food Decay</span>
+          <input type="range" id="env-food-decay" min="30" max="300" step="10" value="${engine.config.foodDecaySeconds}">
+          <span class="env-slider-val" id="env-food-decay-val">${engine.config.foodDecaySeconds}s</span>
+        </div>
       </div>
 
       <div class="bottom-panel-section">
         <div class="bottom-section-title">Day / Night</div>
-        <div class="env-toggle-row">
-          <span class="env-toggle-label">Cycle</span>
-          <label class="env-toggle-wrap">
-            <input type="checkbox" id="env-daynight-toggle" ${engine.world.dayNightEnabled ? 'checked' : ''}>
-            <span class="env-toggle-track"></span>
-            <span class="env-toggle-dot"></span>
-          </label>
+        <div class="daynight-controls" id="daynight-controls">
+          <div class="env-toggle-row">
+            <span class="env-toggle-label">Cycle</span>
+            <label class="env-toggle-wrap">
+              <input type="checkbox" id="env-daynight-toggle" ${engine.world.dayNightEnabled ? 'checked' : ''}>
+              <span class="env-toggle-track"></span>
+              <span class="env-toggle-dot"></span>
+            </label>
+          </div>
+          <div class="env-slider-row">
+            <span class="env-slider-label">Speed</span>
+            <input type="range" id="env-daynight-speed" min="0.1" max="3" step="0.1" value="${engine.world.dayNightSpeed}">
+            <span class="env-slider-val" id="env-daynight-speed-val">${engine.world.dayNightSpeed.toFixed(1)}</span>
+          </div>
+          <div class="env-phase-bar">
+            <div class="env-phase-fill" id="env-daynight-phase" style="width:50%"></div>
+          </div>
         </div>
-        <div class="env-slider-row">
-          <span class="env-slider-label">Speed</span>
-          <input type="range" id="env-daynight-speed" min="0.1" max="3" step="0.1" value="${engine.world.dayNightSpeed}">
-          <span class="env-slider-val" id="env-daynight-speed-val">${engine.world.dayNightSpeed.toFixed(1)}</span>
-        </div>
-        <div class="env-phase-bar">
-          <div class="env-phase-fill" id="env-daynight-phase" style="width:50%"></div>
-        </div>
+        <div class="daynight-disabled-msg" id="daynight-disabled-msg">Place a light source to enable</div>
       </div>
 
       <div class="bottom-panel-section" id="bottom-source-props">
@@ -362,6 +385,15 @@ export function createEnvironmentPanel(
     viscVal.textContent = v.toFixed(2);
   });
 
+  // ── Wire food decay slider ──
+  const foodDecaySlider = document.getElementById('env-food-decay') as HTMLInputElement;
+  const foodDecayVal = document.getElementById('env-food-decay-val')!;
+  foodDecaySlider.addEventListener('input', () => {
+    const v = parseFloat(foodDecaySlider.value);
+    engine.config.foodDecaySeconds = v;
+    foodDecayVal.textContent = `${Math.round(v)}s`;
+  });
+
   // ── Wire day/night toggle ──
   const dnToggle = document.getElementById('env-daynight-toggle') as HTMLInputElement;
   dnToggle.addEventListener('change', () => {
@@ -377,10 +409,15 @@ export function createEnvironmentPanel(
     dnSpeedVal.textContent = v.toFixed(1);
   });
 
-  // ── Update phase indicator bar ──
+  // ── Update phase indicator bar + day/night grayout ──
   const phaseBar = document.getElementById('env-daynight-phase')!;
+  const daynightControls = document.getElementById('daynight-controls')!;
   events.on('stats:updated', () => {
-    if (engine.world.dayNightEnabled) {
+    // Gray out day/night when no light sources
+    const hasLights = engine.world.lightSources.length > 0;
+    daynightControls.classList.toggle('disabled', !hasLights);
+
+    if (engine.world.dayNightEnabled && hasLights) {
       // Phase 0.5 = noon (max brightness), 0 = midnight
       const brightness = 0.5 + 0.5 * Math.sin(engine.world.dayNightPhase * Math.PI * 2 - Math.PI / 2);
       phaseBar.style.width = `${(brightness * 100).toFixed(0)}%`;
@@ -474,7 +511,17 @@ export function createEnvironmentPanel(
           </div>
         </div>
       `;
-      if (cs.type === CurrentType.Directional) {
+      if (cs.type === CurrentType.Whirlpool) {
+        html += `
+          <div class="env-slider-row">
+            <span class="env-slider-label">Spin</span>
+            <div class="env-type-toggle">
+              <button class="env-type-btn ${cs.direction >= 0 ? 'active' : ''}" data-spin="cw">CW</button>
+              <button class="env-type-btn ${cs.direction < 0 ? 'active' : ''}" data-spin="ccw">CCW</button>
+            </div>
+          </div>
+        `;
+      } else if (cs.type === CurrentType.Directional) {
         const deg = Math.round(cs.direction * 180 / Math.PI);
         html += `
           <div class="env-slider-row">
@@ -542,6 +589,24 @@ export function createEnvironmentPanel(
         const src = world.currentSources.find(s => s.id === id);
         if (src) {
           src.type = parseInt((btn as HTMLElement).dataset.ctype!) as 0 | 1;
+          // Reset direction when switching types to avoid invalid values
+          if (src.type === CurrentType.Directional && src.direction < 0) {
+            src.direction = 0; // Clear CCW spin flag for directional
+          } else if (src.type === CurrentType.Whirlpool) {
+            src.direction = src.direction < 0 ? -1 : 0; // Normalize to spin flag
+          }
+          updateSourceProps(type, id, world);
+        }
+      });
+    });
+
+    // Spin toggle (whirlpool current)
+    const spinButtons = document.querySelectorAll('.env-type-btn[data-spin]');
+    spinButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const src = world.currentSources.find(s => s.id === id);
+        if (src) {
+          src.direction = (btn as HTMLElement).dataset.spin === 'ccw' ? -1 : 0;
           updateSourceProps(type, id, world);
         }
       });

@@ -120,7 +120,8 @@ export function runBehaviors(world: World, config: SimConfig): void {
   runSegmentDepthPropagation(world); // Wave per-segment depth from root → leaves
   runHealthChecks(world);
   runTimedDeath(world);
-  updateFood(world.food, world.tick, world.tankCells); // Decay + drift food particles
+  const foodDecayTicks = Math.round(config.foodDecaySeconds * SIM_TICKS_PER_SECOND);
+  updateFood(world.food, world.tick, world.tankCells, foodDecayTicks); // Decay + drift food particles
 }
 
 
@@ -200,6 +201,9 @@ function runPhotosynthesis(world: World, config: SimConfig): void {
         totalLightFeed += Math.min(1, light) * lengthMult;
       }
 
+      // Infection penalty: infected organisms photosynthesize at 50% efficiency
+      if (org.virusInfectionCount > 0) totalLightFeed *= 0.5;
+
       if (totalLightFeed > 0) {
         org.rootHealthReserve = Math.min(
           org.rootHealthReserveMax,
@@ -215,6 +219,9 @@ function runPhotosynthesis(world: World, config: SimConfig): void {
           greenContribution += org.genome[i]?.length || 1;
         }
       }
+
+      // Infection penalty: infected organisms photosynthesize at 50% efficiency
+      if (org.virusInfectionCount > 0) greenContribution *= 0.5;
 
       if (greenContribution > 0) {
         org.rootHealthReserve = Math.min(

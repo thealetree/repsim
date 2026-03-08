@@ -408,7 +408,7 @@ export function createChartSystem(
   const toggle = document.createElement('button');
   toggle.id = 'repsim-left-panel-toggle';
   toggle.className = 'repsim-ui';
-  toggle.textContent = '\u25B6'; // ▶ (points right = expand)
+  toggle.textContent = '\u25C0'; // ◀ (points left = will collapse left)
   toggle.title = 'Toggle charts panel';
 
   let collapsed = false;
@@ -417,7 +417,7 @@ export function createChartSystem(
     collapsed = !collapsed;
     panel.classList.toggle('collapsed', collapsed);
     toggle.classList.toggle('collapsed', collapsed);
-    toggle.textContent = collapsed ? '\u25B6' : '\u25B6'; // always ▶
+    toggle.textContent = collapsed ? '\u25B6' : '\u25C0'; // ▶ = expand right, ◀ = collapse left
   });
 
   // Chart sections
@@ -504,7 +504,7 @@ export function injectChartStyles(): void {
   style.textContent = `
     #repsim-left-panel {
       position: fixed;
-      top: 48px;
+      top: 40px;
       left: 0;
       bottom: 0;
       width: ${CHART_PANEL_WIDTH}px;
@@ -532,7 +532,7 @@ export function injectChartStyles(): void {
     /* Toggle button for left panel (lives outside panel in DOM) */
     #repsim-left-panel-toggle {
       position: fixed;
-      top: 48px;
+      top: 40px;
       left: ${CHART_PANEL_WIDTH}px;
       width: 24px;
       height: 24px;
@@ -548,6 +548,8 @@ export function injectChartStyles(): void {
       color: var(--ui-text-muted);
       z-index: 101;
       pointer-events: auto;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       transition: left 0.2s ease, color 0.12s ease;
     }
     #repsim-left-panel-toggle.collapsed {

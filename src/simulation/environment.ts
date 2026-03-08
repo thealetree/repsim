@@ -237,11 +237,13 @@ export function computeCurrentForce(
     const force = s.strength * CURRENT_FORCE_SCALE * falloff;
 
     if (s.type === CurrentType.Whirlpool) {
-      // Tangential: perpendicular to radius vector (counterclockwise)
+      // Tangential: perpendicular to radius vector
+      // direction >= 0 → CW on screen (default), < 0 → CCW on screen
+      const spin = s.direction < 0 ? -1 : 1;
       const nx = -dy / dist;
       const ny = dx / dist;
-      fx += nx * force;
-      fy += ny * force;
+      fx += nx * force * spin;
+      fy += ny * force * spin;
     } else {
       // Directional: constant direction
       fx += Math.cos(s.direction) * force;

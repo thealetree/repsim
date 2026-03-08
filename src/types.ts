@@ -349,6 +349,7 @@ export interface SimConfig {
   redDamage: number;         // Damage dealt per red segment attack
   purpleCost: number;        // HP cost for sexual reproduction
   baseViscosity: number;     // 0 = max viscosity (sticky), 1 = min viscosity (fluid). Default 0.5 ≈ VERLET_DAMPING
+  foodDecaySeconds: number;  // Food particle lifespan in seconds (30-300, default 120)
 }
 
 

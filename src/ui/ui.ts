@@ -235,7 +235,7 @@ function injectStyles(): void {
     /* ── Right Panel ── */
     #repsim-right-panel {
       position: fixed;
-      top: 48px;
+      top: 40px;
       right: 0;
       bottom: 0;
       width: 220px;
@@ -265,7 +265,7 @@ function injectStyles(): void {
 
     #repsim-panel-toggle {
       position: fixed;
-      top: 48px;
+      top: 40px;
       right: 220px;
       width: 24px;
       height: 24px;
@@ -281,6 +281,8 @@ function injectStyles(): void {
       justify-content: center;
       z-index: 101;
       pointer-events: auto;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       transition: right 0.2s ease, color 0.12s ease;
     }
     #repsim-panel-toggle.collapsed { right: 0; }
@@ -523,6 +525,10 @@ function injectStyles(): void {
       height: 16px;
       fill: currentColor;
     }
+    .tool-icon[data-tool="4"] svg {
+      width: 24px;
+      height: 24px;
+    }
     .tool-sep {
       width: 1px;
       height: 16px;
@@ -562,6 +568,50 @@ function injectStyles(): void {
       color: var(--ui-text-muted);
       font-size: 11px;
       line-height: 1.5;
+    }
+
+    /* ── Zoom Buttons ── */
+    #repsim-zoom-controls {
+      position: fixed;
+      right: 228px;
+      bottom: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      z-index: 101;
+      transition: bottom 0.25s ease, right 0.2s ease;
+    }
+    #repsim-zoom-controls.panel-collapsed {
+      right: 8px;
+    }
+    #repsim-zoom-controls.tank-expanded {
+      bottom: 182px;
+    }
+    .zoom-btn {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--ui-bg);
+      border: 1px solid var(--ui-border);
+      border-radius: 6px;
+      color: var(--ui-text-dim);
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 500;
+      line-height: 1;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: all 0.12s ease;
+      font-family: var(--ui-font);
+    }
+    .zoom-btn:hover {
+      background: var(--ui-surface-hover);
+      color: var(--ui-text);
+    }
+    .zoom-btn:active {
+      transform: scale(0.92);
     }
   `;
   document.head.appendChild(style);
@@ -621,7 +671,7 @@ function buildTopBar(): HTMLElement {
         </button>
         <div class="tool-sep"></div>
         <button class="tool-icon" data-tool="4" title="Current">
-          <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M5 12c0-3.87 3.13-7 7-7s7 3.13 7 7"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M8 12a4 4 0 018 0"/><path fill="currentColor" d="M17 10l3 2-3 2z"/></svg>
+          <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" d="M4 10c2-3 4-3 6 0s4 3 6 0s4-3 6 0"/><path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" d="M4 16c2-3 4-3 6 0s4 3 6 0s4-3 6 0"/></svg>
         </button>
       </div>
     </div>
@@ -737,7 +787,7 @@ function buildToggleButton(): HTMLElement {
   const btn = document.createElement('button');
   btn.id = 'repsim-panel-toggle';
   btn.className = 'repsim-ui';
-  btn.textContent = '\u25C0';
+  btn.textContent = '\u25B6'; // ▶ (points right = will collapse right)
   btn.title = 'Toggle panel';
   return btn;
 }
@@ -746,6 +796,17 @@ function buildFocusIndicator(): HTMLElement {
   const el = document.createElement('div');
   el.id = 'repsim-focus-indicator';
   el.textContent = 'Focus: 1.00';
+  return el;
+}
+
+function buildZoomControls(): HTMLElement {
+  const el = document.createElement('div');
+  el.id = 'repsim-zoom-controls';
+  el.className = 'repsim-ui';
+  el.innerHTML = `
+    <button class="zoom-btn" id="zoom-in" title="Zoom in">+</button>
+    <button class="zoom-btn" id="zoom-out" title="Zoom out">&minus;</button>
+  `;
   return el;
 }
 
@@ -795,10 +856,13 @@ export function createUI(
   const toggleBtn = buildToggleButton();
   const focusIndicator = buildFocusIndicator();
 
+  const zoomControls = buildZoomControls();
+
   document.body.appendChild(topBar);
   document.body.appendChild(rightPanel);
   document.body.appendChild(toggleBtn);
   document.body.appendChild(focusIndicator);
+  document.body.appendChild(zoomControls);
 
   // ── Stat references ──
   const statPop = document.getElementById('stat-pop')!;
@@ -893,8 +957,36 @@ export function createUI(
     panelOpen = !panelOpen;
     rightPanel.classList.toggle('collapsed', !panelOpen);
     toggleBtn.classList.toggle('collapsed', !panelOpen);
-    toggleBtn.textContent = panelOpen ? '\u25C0' : '\u25B6';
+    toggleBtn.textContent = panelOpen ? '\u25B6' : '\u25C0'; // ▶ = collapse right, ◀ = expand left
+    zoomControls.classList.toggle('panel-collapsed', !panelOpen);
   });
+
+  // ── Zoom buttons ──
+  const ZOOM_DELTA = 120; // equivalent to one scroll tick
+  document.getElementById('zoom-in')!.addEventListener('click', () => {
+    renderer.zoom(ZOOM_DELTA);
+  });
+  document.getElementById('zoom-out')!.addEventListener('click', () => {
+    renderer.zoom(-ZOOM_DELTA);
+  });
+
+  // Track bottom panel expand/collapse to push zoom buttons up
+  const bottomPanelObserver = new MutationObserver(() => {
+    const bottomPanel = document.getElementById('repsim-bottom-panel');
+    if (bottomPanel) {
+      zoomControls.classList.toggle('tank-expanded', bottomPanel.classList.contains('expanded'));
+    }
+  });
+  // Observe once the bottom panel exists (it's created later by environment-panel.ts)
+  const waitForBottomPanel = () => {
+    const bp = document.getElementById('repsim-bottom-panel');
+    if (bp) {
+      bottomPanelObserver.observe(bp, { attributes: true, attributeFilter: ['class'] });
+    } else {
+      requestAnimationFrame(waitForBottomPanel);
+    }
+  };
+  waitForBottomPanel();
 
   // ── Accordion sections ──
   rightPanel.querySelectorAll<HTMLElement>('.section-header').forEach((header) => {

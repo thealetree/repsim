@@ -11,7 +11,6 @@
 import type { FoodParticles } from '../types';
 import {
   FOOD_MAX_PARTICLES,
-  FOOD_DECAY_TICKS,
   FOOD_DRIFT_SPEED,
   TANK_GRID_SPACING,
 } from '../constants';
@@ -104,7 +103,7 @@ function syncFoodTankCells(tankCells: Set<string>): void {
 }
 
 /** Update food particles: apply drift and decay expired ones. */
-export function updateFood(food: FoodParticles, tick: number, tankCells: Set<string>): void {
+export function updateFood(food: FoodParticles, tick: number, tankCells: Set<string>, decayTicks: number): void {
   if (food.count === 0) return;
 
   // Sync numeric tank cell lookup (only rebuilds when size changes)
@@ -117,7 +116,7 @@ export function updateFood(food: FoodParticles, tick: number, tankCells: Set<str
     if (!food.alive[i]) continue;
 
     // Decay check — viral food decays in half the time
-    const decayLimit = food.isViral[i] ? FOOD_DECAY_TICKS >> 1 : FOOD_DECAY_TICKS;
+    const decayLimit = food.isViral[i] ? decayTicks >> 1 : decayTicks;
     if (tick - food.spawnTick[i] >= decayLimit) {
       food.alive[i] = 0;
       food.freeSlots.push(i);

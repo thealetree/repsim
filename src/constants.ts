@@ -20,13 +20,14 @@ export const DEFAULT_CONFIG: SimConfig = {
   virusEnabled: false,    // Off by default — player can enable for extra challenge
   virusVirulence: 0.5,   // Base virulence multiplier
   virusTransmission: 0.5, // Base transmission multiplier
-  virusImmunityTime: 35,  // Seconds to develop immunity
+  virusImmunityTime: 50,  // Seconds to develop immunity
   greenFeed: 100,         // HP per photosynthesis tick — balanced against root drain of 70
   blueHP: 1000,           // Extra HP per blue segment — doubles base segment health
   yellowFreq: 1.25,       // Seconds between movement — not too twitchy, not too sluggish
   redDamage: 400,         // Damage per attack — kills a normal segment in ~2.5 hits
   purpleCost: 2500,       // Sexual repro cost per parent — total 5000 vs scaled asexual
   baseViscosity: 0.5,      // Default maps to VERLET_DAMPING (0.98)
+  foodDecaySeconds: 120,   // Food particle lifespan in seconds (slider range 30-300)
 };
 
 
@@ -372,7 +373,7 @@ export const TEMP_COLD_COLOR = 0x2244ff;       // Blue overlay for cold
 // can eat them, creating an emergent food chain / trophic loop.
 
 export const FOOD_MAX_PARTICLES = 500;                      // Cap on simultaneous food particles
-export const FOOD_DECAY_TICKS = 1200;                       // ~60 seconds at 20 tps
+export const FOOD_DECAY_TICKS = 2400;                       // ~120 seconds at 20 tps (default, overridden by config)
 export const FOOD_ENERGY_PER_SEGMENT = 500;                 // Energy value of each food particle
 export const FOOD_PARTICLE_RADIUS = 3;                      // Visual radius (smaller than segments)
 export const FOOD_DRIFT_SPEED = 0.15;                       // Slow random drift per tick (world units)
@@ -399,7 +400,7 @@ export const VIRUS_VERTICAL_TRANSMISSION_CHANCE = 0.15;       // 15% parent→of
 export const VIRUS_IMMUNITY_INHERITANCE_CHANCE = 0.5;          // 50% immunity passed to child
 export const VIRUS_MUTATION_DRIFT = 0.1;                      // ±drift on virulence/transmission per spread
 export const VIRUS_COLOR_MUTATION_CHANCE = 0.1;                // 10% chance affinity changes on spread
-export const VIRUS_ENERGY_DRAIN_RATE = 200;                    // HP drained per effect tick (× virulence) — scales with org size
+export const VIRUS_ENERGY_DRAIN_RATE = 400;                    // HP drained per effect tick (× virulence) — scales with org size
 export const VIRUS_SWELLING_FACTOR = 1.3;                      // Scale multiplier for swollen segments
 export const VIRUS_JOINT_WOBBLE = 0.20;                        // ±20% rest length oscillation
 export const VIRUS_CORRUPTION_RATE = 0.02;                     // Per-tick chance of behavior skip

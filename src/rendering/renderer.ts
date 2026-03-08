@@ -54,14 +54,8 @@ import {
   MAX_TEMPERATURE_SOURCES,
   LIGHT_DEFAULT_RADIUS,
   LIGHT_DEFAULT_INTENSITY,
-  LIGHT_MIN_RADIUS,
-  LIGHT_MAX_RADIUS,
-  LIGHT_RESIZE_SPEED,
   TEMP_DEFAULT_RADIUS,
   TEMP_DEFAULT_INTENSITY,
-  TEMP_MIN_RADIUS,
-  TEMP_MAX_RADIUS,
-  TEMP_RESIZE_SPEED,
   FOOD_MAX_PARTICLES,
   FOOD_PARTICLE_RADIUS,
   FOOD_RENDER_COLOR,
@@ -73,9 +67,6 @@ import {
   MAX_CURRENT_SOURCES,
   CURRENT_DEFAULT_RADIUS,
   CURRENT_DEFAULT_STRENGTH,
-  CURRENT_MIN_RADIUS,
-  CURRENT_MAX_RADIUS,
-  CURRENT_RESIZE_SPEED,
   CURRENT_COLOR,
 } from '../constants';
 import { VirusEffect } from '../types';
@@ -115,6 +106,7 @@ export interface Renderer {
   setTheme(theme: 'dark' | 'light'): void;
   setDesaturated(on: boolean): void;
   setToolMode(mode: ToolMode): void;
+  zoom(delta: number): void;
 }
 
 
@@ -368,7 +360,7 @@ export async function createRenderer(width: number, height: number): Promise<Ren
     boxPreviewGraphics.clear();
   }
 
-  // Wheel: Alt+scroll = focus depth, source selected = resize radius, regular scroll = zoom
+  // Wheel: Alt+scroll = focus depth, otherwise = zoom (always)
   canvas.addEventListener('wheel', (e: WheelEvent) => {
     e.preventDefault();
     if (e.altKey) {
@@ -377,28 +369,6 @@ export async function createRenderer(width: number, height: number): Promise<Ren
       focusDepth = Math.max(0, Math.min(1, focusDepth + delta));
       renderer.focusDepth = focusDepth;
       canvas.dispatchEvent(new CustomEvent('focusdepthchange', { detail: focusDepth }));
-    } else if (selectedSourceId !== null && currentWorld) {
-      // Resize selected source radius
-      const sources = selectedSourceType === 'light'
-        ? currentWorld.lightSources
-        : selectedSourceType === 'temperature'
-        ? currentWorld.temperatureSources
-        : currentWorld.currentSources;
-      const src = sources.find(s => s.id === selectedSourceId);
-      if (src) {
-        const speed = selectedSourceType === 'light' ? LIGHT_RESIZE_SPEED
-          : selectedSourceType === 'temperature' ? TEMP_RESIZE_SPEED
-          : CURRENT_RESIZE_SPEED;
-        const minR = selectedSourceType === 'light' ? LIGHT_MIN_RADIUS
-          : selectedSourceType === 'temperature' ? TEMP_MIN_RADIUS
-          : CURRENT_MIN_RADIUS;
-        const maxR = selectedSourceType === 'light' ? LIGHT_MAX_RADIUS
-          : selectedSourceType === 'temperature' ? TEMP_MAX_RADIUS
-          : CURRENT_MAX_RADIUS;
-        const delta = e.deltaY > 0 ? -speed : speed;
-        src.radius = Math.max(minR, Math.min(maxR, src.radius + delta));
-        if (onSourceSelected) onSourceSelected(selectedSourceType, selectedSourceId);
-      }
     } else {
       const rect = canvas.getBoundingClientRect();
       const scaleX = screenWidth / rect.width;
@@ -680,6 +650,10 @@ export async function createRenderer(width: number, height: number): Promise<Ren
         renderer.selectedSourceId = null;
         if (onSourceSelected) onSourceSelected(null, null);
       }
+    },
+
+    zoom(delta: number): void {
+      zoomCamera(camera, delta, screenWidth / 2, screenHeight / 2, screenWidth, screenHeight);
     },
 
     render(world: World, _alpha: number): void {
@@ -1192,9 +1166,39 @@ export async function createRenderer(width: number, height: number): Promise<Ren
             selectionGraphics.moveTo(cs.x - dx, cs.y - dy);
             selectionGraphics.lineTo(cs.x + dx, cs.y + dy);
             selectionGraphics.stroke({ color: CURRENT_COLOR, width: 2, alpha: 0.4 });
+            // Arrowhead
+            const tipX = cs.x + dx;
+            const tipY = cs.y + dy;
+            const al = Math.min(14, cs.radius * 0.08);
+            const aa = Math.PI / 6;
+            selectionGraphics.moveTo(
+              tipX - al * Math.cos(cs.direction - aa),
+              tipY - al * Math.sin(cs.direction - aa)
+            );
+            selectionGraphics.lineTo(tipX, tipY);
+            selectionGraphics.lineTo(
+              tipX - al * Math.cos(cs.direction + aa),
+              tipY - al * Math.sin(cs.direction + aa)
+            );
+            selectionGraphics.stroke({ color: CURRENT_COLOR, width: 2, alpha: 0.4 });
           } else {
-            // Whirlpool arc indicator
-            selectionGraphics.arc(cs.x, cs.y, cs.radius * 0.3, 0, Math.PI * 1.5);
+            // Whirlpool arc indicator — direction >= 0 = CW on screen, < 0 = CCW
+            const arcR = cs.radius * 0.3;
+            const cw = cs.direction >= 0;
+            selectionGraphics.moveTo(cs.x + arcR, cs.y);
+            if (cw) {
+              selectionGraphics.arc(cs.x, cs.y, arcR, 0, Math.PI * 1.5, false);
+            } else {
+              selectionGraphics.arc(cs.x, cs.y, arcR, 0, Math.PI * 0.5, true);
+            }
+            selectionGraphics.stroke({ color: CURRENT_COLOR, width: 2, alpha: 0.3 });
+            // Arrowhead at arc endpoint
+            const al = Math.min(12, arcR * 0.35);
+            const tipX = cs.x;
+            const tipY = cw ? cs.y - arcR : cs.y + arcR;
+            selectionGraphics.moveTo(tipX - al * 0.87, tipY - al * 0.5);
+            selectionGraphics.lineTo(tipX, tipY);
+            selectionGraphics.lineTo(tipX - al * 0.87, tipY + al * 0.5);
             selectionGraphics.stroke({ color: CURRENT_COLOR, width: 2, alpha: 0.3 });
           }
         }
