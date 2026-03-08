@@ -23,6 +23,7 @@ import { createChartSystem, injectChartStyles } from './ui/charts';
 import { parseUrlParams, injectSaveShareStyles } from './ui/save-share';
 import { createTutorialSystem, createTutorialButton, autoStartTutorial, injectTutorialStyles } from './ui/tutorial';
 import { createEnvironmentPanel, injectEnvironmentPanelStyles } from './ui/environment-panel';
+import { setupMobileLayout } from './ui/mobile-layout';
 import { DEFAULT_CONFIG } from './constants';
 
 /**
@@ -67,6 +68,9 @@ async function main(): Promise<void> {
   // ── 8b. Bottom Environment Panel ──
   injectEnvironmentPanelStyles();
   createEnvironmentPanel(engine, renderer, events);
+
+  // ── 8c. Mobile Layout ──
+  setupMobileLayout(engine, renderer, events);
 
   // ── 9. Tutorial System ──
   injectTutorialStyles();

@@ -84,6 +84,31 @@ export function zoomCamera(
 
 
 /**
+ * Apply zoom to a specific level, centered on a screen point.
+ * Used for pinch-to-zoom where we know the exact target zoom level.
+ */
+export function zoomCameraTo(
+  camera: Camera,
+  newZoom: number,
+  screenX: number,
+  screenY: number,
+  screenWidth: number,
+  screenHeight: number,
+): void {
+  const worldXBefore = (screenX - screenWidth / 2) / camera.zoom + camera.x;
+  const worldYBefore = (screenY - screenHeight / 2) / camera.zoom + camera.y;
+
+  camera.zoom = Math.max(camera.minZoom, Math.min(camera.maxZoom, newZoom));
+
+  const worldXAfter = (screenX - screenWidth / 2) / camera.zoom + camera.x;
+  const worldYAfter = (screenY - screenHeight / 2) / camera.zoom + camera.y;
+
+  camera.x += worldXBefore - worldXAfter;
+  camera.y += worldYBefore - worldYAfter;
+}
+
+
+/**
  * Pan the camera by a screen-space offset (e.g., from mouse drag).
  * Divides by zoom so panning speed feels consistent at any zoom level.
  *

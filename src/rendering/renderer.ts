@@ -71,6 +71,7 @@ import {
 } from '../constants';
 import { VirusEffect } from '../types';
 import { computeLight, getDayNightMultiplier } from '../simulation/environment';
+import { setupTouchInput } from '../ui/touch';
 
 
 // ─── Types ───────────────────────────────────────────────────
@@ -616,6 +617,18 @@ export async function createRenderer(width: number, height: number): Promise<Ren
     isDraggingSource = false;
   });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // ── Touch Input (mobile) ──
+  const touchCleanup = setupTouchInput(canvas, camera, {
+    selectClick: handleSelectClick,
+    tankClick: handleTankClick,
+    lightClick: handleLightClick,
+    temperatureClick: handleTemperatureClick,
+    currentClick: handleCurrentClick,
+    screenToWorld,
+    getScreenDimensions: () => ({ width: screenWidth, height: screenHeight }),
+    getToolMode: () => toolMode,
+  });
 
   // ── The Renderer Object ──
   const renderer: Renderer = {
@@ -1251,6 +1264,7 @@ export async function createRenderer(width: number, height: number): Promise<Ren
     },
 
     destroy(): void {
+      touchCleanup.destroy();
       app.destroy(true, { children: true, texture: true });
     },
 

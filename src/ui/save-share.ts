@@ -591,6 +591,11 @@ export function injectSaveShareStyles(): void {
     .repsim-toast.visible {
       opacity: 1;
     }
+
+    /* ── Mobile Responsive ── */
+    @media (max-width: 767px) {
+      .repsim-toast { bottom: 68px; }
+    }
   `;
   document.head.appendChild(style);
 }

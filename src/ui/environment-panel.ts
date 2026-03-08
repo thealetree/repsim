@@ -260,6 +260,12 @@ export function injectEnvironmentPanelStyles(): void {
     .source-delete-btn:hover {
       background: rgba(255,60,60,0.2);
     }
+
+    /* ── Mobile Responsive ── */
+    @media (max-width: 767px) {
+      #repsim-bottom-panel,
+      #repsim-bottom-toggle { display: none !important; }
+    }
   `;
   document.head.appendChild(style);
 }

@@ -558,6 +558,12 @@ export function injectChartStyles(): void {
     #repsim-left-panel-toggle:hover {
       color: var(--ui-text);
     }
+
+    /* ── Mobile Responsive ── */
+    @media (max-width: 767px) {
+      #repsim-left-panel,
+      #repsim-left-panel-toggle { display: none !important; }
+    }
   `;
   document.head.appendChild(style);
 }
