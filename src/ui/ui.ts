@@ -619,33 +619,22 @@ function injectStyles(): void {
       #repsim-top-bar {
         height: 44px;
         padding: 0 8px;
-        overflow-x: auto;
-        overflow-y: hidden;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        justify-content: flex-start;
+        overflow: hidden;
+        justify-content: space-between;
         gap: 0;
       }
-      #repsim-top-bar::-webkit-scrollbar { display: none; }
 
-      .top-left, .top-right { flex-shrink: 0; }
-      .top-left { gap: 12px; }
-      .top-right { gap: 6px; }
+      .top-left { gap: 6px; flex-shrink: 0; }
+      .top-right { display: none !important; }
       .top-divider { display: none; }
 
       /* Show only Pop and Time stats */
-      #repsim-stats { gap: 12px; font-size: 11px; }
+      #repsim-stats { gap: 8px; font-size: 11px; }
       #repsim-stats .stat-item:nth-child(2),
       #repsim-stats .stat-item:nth-child(3) { display: none; }
 
-      /* Larger touch targets */
-      .tool-icon { width: 32px; height: 32px; min-width: 32px; }
-      #repsim-speed-controls .ui-btn { padding: 6px 10px; font-size: 12px; }
-      .ui-btn { padding: 7px 12px; font-size: 12px; }
-
-      /* Compact focus slider */
-      .top-focus-group { gap: 4px; }
-      .top-focus-slider { width: 50px; }
+      /* Compact tool icons */
+      .tool-icon { width: 28px; height: 28px; min-width: 28px; }
 
       /* Hide desktop panels */
       #repsim-right-panel,

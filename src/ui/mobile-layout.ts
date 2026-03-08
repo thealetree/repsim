@@ -264,6 +264,100 @@ function injectMobileStyles(): void {
     #repsim-sheet-content canvas {
       width: 100% !important;
     }
+
+    /* ── Mobile Top Bar Controls ── */
+
+    /* Pause + More buttons: hidden on desktop */
+    #repsim-mobile-pause,
+    #repsim-mobile-more {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 8px;
+      background: var(--ui-bg);
+      color: var(--ui-text);
+      font-size: 14px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      flex-shrink: 0;
+    }
+    #repsim-mobile-pause.paused {
+      color: var(--ui-accent);
+      background: var(--ui-accent-dim);
+    }
+    #repsim-mobile-more.active {
+      color: var(--ui-accent);
+      background: var(--ui-accent-dim);
+    }
+    @media (max-width: ${MOBILE_BREAKPOINT - 1}px) {
+      #repsim-mobile-pause,
+      #repsim-mobile-more { display: flex; }
+    }
+
+    /* Top dropdown panel */
+    #repsim-top-dropdown {
+      display: none;
+      position: fixed;
+      top: 44px;
+      left: 0;
+      right: 0;
+      background: var(--ui-bg-solid);
+      border-bottom: 1px solid var(--ui-border);
+      z-index: 350;
+      padding: 10px 12px;
+      flex-direction: column;
+      gap: 10px;
+      font-family: var(--ui-font);
+      color: var(--ui-text);
+    }
+    #repsim-top-dropdown.open {
+      display: flex;
+    }
+
+    .top-dropdown-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .top-dropdown-row .row-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ui-text-muted);
+      text-transform: uppercase;
+      width: 50px;
+      flex-shrink: 0;
+    }
+    .top-dropdown-row .row-content {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    /* Speed buttons in dropdown */
+    #repsim-top-dropdown .ui-btn {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+
+    /* Focus slider in dropdown */
+    #repsim-top-dropdown .top-focus-slider {
+      width: 100%;
+      flex: 1;
+    }
+    #repsim-top-dropdown .top-focus-label {
+      font-size: 11px;
+    }
+
+    /* Action buttons in dropdown */
+    #repsim-top-dropdown .btn-group {
+      display: flex;
+      gap: 0;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -305,6 +399,115 @@ export function setupMobileLayout(
   document.body.appendChild(backdrop);
   document.body.appendChild(sheet);
 
+  // ── Mobile Top Bar: Pause + More buttons ──
+  const pauseBtn = document.createElement('button');
+  pauseBtn.id = 'repsim-mobile-pause';
+  pauseBtn.innerHTML = '&#10073;&#10073;';
+  pauseBtn.title = 'Pause / Play';
+
+  const moreBtn = document.createElement('button');
+  moreBtn.id = 'repsim-mobile-more';
+  moreBtn.innerHTML = '&#8943;'; // ⋯
+  moreBtn.title = 'More controls';
+
+  // Inject pause + more into top bar (after .top-left, before .top-right)
+  const topBar = document.getElementById('repsim-top-bar');
+  const topRight = topBar?.querySelector('.top-right');
+  if (topBar && topRight) {
+    topBar.insertBefore(moreBtn, topRight);
+    topBar.insertBefore(pauseBtn, moreBtn);
+  }
+
+  // ── Top Dropdown Panel ──
+  const topDropdown = document.createElement('div');
+  topDropdown.id = 'repsim-top-dropdown';
+  topDropdown.className = 'repsim-ui';
+  document.body.appendChild(topDropdown);
+
+  let topDropdownOpen = false;
+  let topRightNodes: Node[] = [];
+  let topRightParent: HTMLElement | null = null;
+
+  function openTopDropdown(): void {
+    // Move .top-right children into dropdown
+    const tr = document.querySelector('#repsim-top-bar .top-right') as HTMLElement | null;
+    if (tr && topRightNodes.length === 0) {
+      topRightParent = tr;
+      topRightNodes = Array.from(tr.children);
+      for (const node of topRightNodes) {
+        topDropdown.appendChild(node);
+      }
+    }
+    topDropdown.classList.add('open');
+    moreBtn.classList.add('active');
+    topDropdownOpen = true;
+  }
+
+  function closeTopDropdown(): void {
+    topDropdown.classList.remove('open');
+    moreBtn.classList.remove('active');
+    topDropdownOpen = false;
+    // Return nodes to .top-right
+    if (topRightParent && topRightNodes.length > 0) {
+      for (const node of topRightNodes) {
+        topRightParent.appendChild(node);
+      }
+      topRightNodes = [];
+    }
+  }
+
+  moreBtn.addEventListener('click', () => {
+    if (topDropdownOpen) {
+      closeTopDropdown();
+    } else {
+      openTopDropdown();
+    }
+  });
+
+  // ── Pause Button ──
+  let lastNonZeroSpeed = '1';
+
+  function syncPauseVisual(): void {
+    const activeSpeedBtn = document.querySelector('#repsim-speed-controls .ui-btn.active') as HTMLElement | null;
+    const currentSpeed = activeSpeedBtn?.dataset.speed ?? '1';
+    if (currentSpeed === '0') {
+      pauseBtn.innerHTML = '&#9654;';
+      pauseBtn.classList.add('paused');
+    } else {
+      pauseBtn.innerHTML = '&#10073;&#10073;';
+      pauseBtn.classList.remove('paused');
+      lastNonZeroSpeed = currentSpeed;
+    }
+  }
+
+  pauseBtn.addEventListener('click', () => {
+    const activeSpeedBtn = document.querySelector('#repsim-speed-controls .ui-btn.active') as HTMLElement | null;
+    const currentSpeed = activeSpeedBtn?.dataset.speed ?? '1';
+    const speedBtns = document.querySelectorAll<HTMLButtonElement>('#repsim-speed-controls .ui-btn');
+
+    if (currentSpeed === '0') {
+      // Resume to last speed
+      speedBtns.forEach(btn => {
+        if (btn.dataset.speed === lastNonZeroSpeed) btn.click();
+      });
+    } else {
+      // Pause
+      lastNonZeroSpeed = currentSpeed;
+      speedBtns.forEach(btn => {
+        if (btn.dataset.speed === '0') btn.click();
+      });
+    }
+    syncPauseVisual();
+  });
+
+  // Watch speed buttons for changes (also fired from dropdown)
+  const speedControls = document.getElementById('repsim-speed-controls');
+  if (speedControls) {
+    speedControls.addEventListener('click', () => {
+      requestAnimationFrame(syncPauseVisual);
+    });
+  }
+
   const sheetContent = document.getElementById('repsim-sheet-content')!;
   const sheetHandle = document.getElementById('repsim-sheet-handle')!;
 
@@ -321,6 +524,9 @@ export function setupMobileLayout(
   // ── Open / Close Sheet ──
 
   function openSheet(tabId: string): void {
+    // Close top dropdown if open
+    if (topDropdownOpen) closeTopDropdown();
+
     // Close current if different tab
     if (activeTab && activeTab !== tabId) {
       returnContent();
@@ -440,8 +646,9 @@ export function setupMobileLayout(
     wasMobile = nowMobile;
 
     if (!nowMobile) {
-      // Crossed to desktop: close sheet, return all content
+      // Crossed to desktop: close everything, return all content
       closeSheet();
+      if (topDropdownOpen) closeTopDropdown();
       // Reset content map so it rebuilds fresh next time
       contentMap = null;
     }
