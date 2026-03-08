@@ -169,7 +169,8 @@ export function createSimulationEngine(
       w.stats.population = 0;
       w.stats.births = 0;
       w.stats.deaths = 0;
-      // Reseed population
+      // Reseed population (force tankCellsArray refresh for custom tank shapes)
+      w.tankCellsDirty = true;
       seedPopulation(w, engine.config);
       events.emit('sim:reset', undefined);
     },
