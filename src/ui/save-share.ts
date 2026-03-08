@@ -384,7 +384,20 @@ export function buildSaveShareSection(
     );
     const url = await generateTankURL(payload);
     if (url) {
-      await navigator.clipboard.writeText(url);
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.cssText = 'position:fixed;left:-9999px;';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      const orig = copyBtn.textContent;
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => { copyBtn.textContent = orig; }, 1200);
       showToast('URL copied to clipboard!');
     } else {
       showToast('Too large for URL — use Download instead');
@@ -449,7 +462,22 @@ export function createShareButton(
     const payload = serializeOrganism(org.genome, org.generation, org.name);
     const url = await generateOrganismURL(payload);
     if (url) {
-      await navigator.clipboard.writeText(url);
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        // Fallback for non-secure contexts or denied permissions
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.cssText = 'position:fixed;left:-9999px;';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      // Flash button text as confirmation
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = orig; }, 1200);
       showToast('Genome URL copied!');
     } else {
       downloadJSON(payload, `repsim-${org.name}.repsim`);
