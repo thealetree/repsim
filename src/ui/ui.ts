@@ -15,10 +15,6 @@ import { ToolMode } from '../types';
 import {
   SEGMENT_RENDER_COLORS,
   REPRO_METER_MAX,
-  LIGHT_MIN_RADIUS,
-  LIGHT_MAX_RADIUS,
-  TEMP_MIN_RADIUS,
-  TEMP_MAX_RADIUS,
   DEFAULT_CONFIG,
 } from '../constants';
 import { createSpontaneousStrain, infectSegment } from '../simulation/virus';
@@ -49,7 +45,6 @@ interface SliderDef {
 const CONFIG_SLIDERS: SliderDef[] = [
   { key: 'repCount', label: 'Start Pop', min: 10, max: 200, step: 10 },     // default 100
   { key: 'repLimit', label: 'Pop Limit', min: 50, max: 1000, step: 50 },   // default 500
-  { key: 'greenFeed', label: 'Photo', min: 10, max: 190, step: 10 },       // default 100
   { key: 'blueHP', label: 'Armor', min: 100, max: 1900, step: 100 },       // default 1000
   { key: 'yellowFreq', label: 'Speed', min: 0.25, max: 2.25, step: 0.25, invert: true }, // default 1.25; invert so + = faster
   { key: 'redDamage', label: 'Attack', min: 50, max: 750, step: 50 },      // default 400
@@ -206,6 +201,35 @@ function injectStyles(): void {
     }
     #repsim-speed-controls .ui-btn.active {
       background: var(--ui-accent-dim);
+    }
+
+    /* ── Top Bar Focus ── */
+    .top-focus-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .top-focus-label {
+      font-size: 10px;
+      color: var(--ui-text-dim);
+      font-weight: 500;
+    }
+    .top-focus-slider {
+      width: 60px;
+      height: 4px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--ui-slider-track);
+      border-radius: 2px;
+      outline: none;
+    }
+    .top-focus-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--ui-slider-thumb);
+      cursor: pointer;
     }
 
     /* ── Right Panel ── */
@@ -602,6 +626,10 @@ function buildTopBar(): HTMLElement {
       </div>
     </div>
     <div class="top-right">
+      <div class="top-focus-group">
+        <span class="top-focus-label">Focus</span>
+        <input type="range" id="focus-slider" min="0" max="1" step="0.02" value="1" class="top-focus-slider">
+      </div>
       <div class="btn-group">
         <button class="ui-btn btn-group-left" id="repsim-flush" title="Flush">Flush</button>
         <button class="ui-btn btn-group-right" id="repsim-new-tank" title="New">New</button>
@@ -625,16 +653,6 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
   const panel = document.createElement('div');
   panel.id = 'repsim-right-panel';
   panel.className = 'repsim-ui';
-
-  // Focus section
-  const focusContent = `
-    <div class="slider-row">
-      <span class="slider-label">Depth</span>
-      <input type="range" id="focus-slider" min="0" max="1" step="0.02" value="1">
-      <span class="slider-value" id="focus-value">1.00</span>
-    </div>
-    <div class="hint-text"><span class="hint-kbd">Alt</span>+Scroll to adjust</div>
-  `;
 
   // Config sliders
   let slidersContent = '';
@@ -665,13 +683,6 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
       <span class="hint-kbd">Left click</span> Select organism<br>
       <span class="hint-kbd">Shift+click</span> Sculpt tank<br>
       <span class="hint-kbd">Alt+Scroll</span> Focus depth
-    </div>
-  `;
-
-  // Environment section
-  const envContent = `
-    <div id="repsim-source-props">
-      <span class="env-placeholder">Use Light/Temp tools to place sources</span>
     </div>
   `;
 
@@ -714,11 +725,9 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
   `;
 
   panel.innerHTML =
-    buildSection('Focus Depth', 'focus', focusContent) +
-    buildSection('Environment', 'env', envContent) +
+    buildSection('Selected Organism', 'organism', orgContent) +
     buildSection('Virus', 'virus', virusContent) +
     buildSection('Simulation', 'sim', slidersContent) +
-    buildSection('Selected Organism', 'organism', orgContent) +
     buildSection('Controls', 'controls', controlsContent, false);
 
   return panel;
@@ -849,7 +858,7 @@ export function createUI(
     renderer.selectedSourceId = null;
     renderer.setWallsDirty();
     events.emit('organism:selected', { id: null });
-    updateSourcePropsPanel(null, null);
+    events.emit('source:selected', { type: null, id: null });
   });
 
   // ── Desaturation toggle ──
@@ -898,30 +907,27 @@ export function createUI(
     });
   });
 
-  // ── Save & Share section (inserted after accordion setup to avoid double-toggle) ──
+  // ── Save & Share section (inserted after organism section) ──
   const saveShareSection = buildSaveShareSection(engine, renderer, tooltips);
-  const simSection = rightPanel.querySelector('[data-section="sim"]');
-  if (simSection) {
-    rightPanel.insertBefore(saveShareSection, simSection);
+  const virusSection = rightPanel.querySelector('[data-section="virus"]');
+  if (virusSection) {
+    rightPanel.insertBefore(saveShareSection, virusSection);
   } else {
     rightPanel.appendChild(saveShareSection);
   }
 
-  // ── Focus slider ──
+  // ── Focus slider (in top bar) ──
   const focusSlider = document.getElementById('focus-slider') as HTMLInputElement;
-  const focusValue = document.getElementById('focus-value')!;
 
   focusSlider.addEventListener('input', () => {
     const val = parseFloat(focusSlider.value);
     renderer.setFocusDepth(val);
-    focusValue.textContent = val.toFixed(2);
   });
 
   // Sync focus slider when alt+scroll changes focus
   renderer.getCanvas().addEventListener('focusdepthchange', ((e: CustomEvent) => {
     const val = e.detail as number;
     focusSlider.value = String(val);
-    focusValue.textContent = val.toFixed(2);
     focusIndicator.textContent = `Focus: ${val.toFixed(2)}`;
     focusIndicator.classList.add('visible');
     clearTimeout(focusHideTimer);
@@ -963,15 +969,6 @@ export function createUI(
         }
       });
     });
-  }
-
-  // ── Gray out green (Photo) slider when light sources exist ──
-  const greenRow = document.getElementById('row-greenFeed');
-  if (greenRow) {
-    setInterval(() => {
-      const hasLights = engine.world.lightSources.length > 0;
-      greenRow.classList.toggle('slider-disabled', hasLights);
-    }, 500);
   }
 
   // ── Virus controls ──
@@ -1095,91 +1092,10 @@ export function createUI(
     });
   });
 
-  // ── Source selection & properties panel ──
-  const sourcePropsEl = document.getElementById('repsim-source-props')!;
-
-  function updateSourcePropsPanel(type: 'light' | 'temperature' | 'current' | null, id: number | null): void {
-    if (type === null || id === null || type === 'current') {
-      // Current sources are handled by the bottom environment panel
-      sourcePropsEl.innerHTML = '<span class="env-placeholder">Use Light/Temp tools to place sources</span>';
-      return;
-    }
-
-    const sources = type === 'light'
-      ? engine.world.lightSources
-      : engine.world.temperatureSources;
-    const src = sources.find(s => s.id === id);
-    if (!src) {
-      sourcePropsEl.innerHTML = '<span class="env-placeholder">Use Light/Temp tools to place sources</span>';
-      return;
-    }
-
-    const isLight = type === 'light';
-    const minR = isLight ? LIGHT_MIN_RADIUS : TEMP_MIN_RADIUS;
-    const maxR = isLight ? LIGHT_MAX_RADIUS : TEMP_MAX_RADIUS;
-    const intMin = isLight ? 0 : -1;
-    const intMax = 1;
-    const intStep = 0.05;
-    const label = isLight ? `Light #${id}` : `Temperature #${id}`;
-
-    sourcePropsEl.innerHTML = `
-      <div class="source-props">
-        <div class="source-type-label">${label}</div>
-        <div class="slider-row">
-          <span class="slider-label">Radius</span>
-          <input type="range" id="source-radius" min="${minR}" max="${maxR}" step="10" value="${src.radius}">
-          <span class="slider-value" id="source-radius-val">${Math.round(src.radius)}</span>
-        </div>
-        <div class="slider-row">
-          <span class="slider-label">Intensity</span>
-          <input type="range" id="source-intensity" min="${intMin}" max="${intMax}" step="${intStep}" value="${src.intensity}">
-          <span class="slider-value" id="source-intensity-val">${src.intensity.toFixed(2)}</span>
-        </div>
-        <button class="source-delete-btn" id="source-delete">Delete Source</button>
-      </div>
-    `;
-
-    // Wire radius slider
-    const radiusSlider = document.getElementById('source-radius') as HTMLInputElement;
-    const radiusVal = document.getElementById('source-radius-val')!;
-    radiusSlider.addEventListener('input', () => {
-      src.radius = parseFloat(radiusSlider.value);
-      radiusVal.textContent = String(Math.round(src.radius));
-    });
-
-    // Wire intensity slider
-    const intSlider = document.getElementById('source-intensity') as HTMLInputElement;
-    const intVal = document.getElementById('source-intensity-val')!;
-    intSlider.addEventListener('input', () => {
-      src.intensity = parseFloat(intSlider.value);
-      intVal.textContent = src.intensity.toFixed(2);
-    });
-
-    // Wire delete button
-    document.getElementById('source-delete')!.addEventListener('click', () => {
-      const arr = type === 'light'
-        ? engine.world.lightSources
-        : engine.world.temperatureSources;
-      const idx = arr.findIndex(s => s.id === id);
-      if (idx !== -1) arr.splice(idx, 1);
-      renderer.selectedSourceType = null;
-      renderer.selectedSourceId = null;
-      updateSourcePropsPanel(null, null);
-    });
-  }
-
-  // Renderer source selection callback — set here initially; the bottom
-  // environment panel (created after createUI) will override this to also
-  // update its own source properties section.
+  // ── Source selection — forward to bottom environment panel via events ──
   renderer.onSourceSelected = (type, id) => {
     events.emit('source:selected', { type: type ?? null, id: id ?? null });
-    updateSourcePropsPanel(type, id);
   };
-
-  // Update source props panel when source is resized via scroll
-  events.on('source:selected', (data) => {
-    updateSourcePropsPanel(data.type, data.id);
-  });
 
   // ── Attach tooltips to all interactive elements ──
   if (tooltips) {
@@ -1239,9 +1155,9 @@ export function createUI(
       if (releaseBtn) tooltips.attach(releaseBtn as HTMLElement, 'virus-release');
     }
 
-    // Focus depth slider
-    const focusSlider = rightPanel.querySelector('[data-section="focus"] .config-slider');
-    if (focusSlider) tooltips.attach(focusSlider as HTMLElement, 'focus-slider');
+    // Focus depth slider (in top bar)
+    const topFocusGroup = topBar.querySelector('.top-focus-group');
+    if (topFocusGroup) tooltips.attach(topFocusGroup as HTMLElement, 'focus-slider');
 
     // Tooltips ON/OFF toggle in Controls section
     const controlsBody = rightPanel.querySelector('[data-body="controls"]');

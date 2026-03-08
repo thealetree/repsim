@@ -271,6 +271,11 @@ export function createEnvironmentPanel(
       <div class="bottom-panel-section">
         <div class="bottom-section-title">Environment</div>
         <div class="env-slider-row">
+          <span class="env-slider-label">Light</span>
+          <input type="range" id="env-light" min="10" max="190" step="10" value="${engine.config.greenFeed}">
+          <span class="env-slider-val" id="env-light-val">${engine.config.greenFeed}</span>
+        </div>
+        <div class="env-slider-row">
           <span class="env-slider-label">Viscosity</span>
           <input type="range" id="env-viscosity" min="0" max="1" step="0.05" value="${(1 - engine.config.baseViscosity).toFixed(2)}">
           <span class="env-slider-val" id="env-viscosity-val">${(1 - engine.config.baseViscosity).toFixed(2)}</span>
@@ -298,8 +303,8 @@ export function createEnvironmentPanel(
       </div>
 
       <div class="bottom-panel-section" id="bottom-source-props">
-        <div class="bottom-section-title">Source Properties</div>
-        <span class="env-placeholder">Select a light, temp, or current source</span>
+        <div class="bottom-section-title">Light / Temp / Current</div>
+        <span class="env-placeholder">Select a source to edit</span>
       </div>
     </div>
   `;
@@ -337,6 +342,15 @@ export function createEnvironmentPanel(
   setInterval(syncPanelEdges, 150);
   // Also sync immediately on resize
   window.addEventListener('resize', syncPanelEdges);
+
+  // ── Wire Light (photosynthesis) slider ──
+  const lightSlider = document.getElementById('env-light') as HTMLInputElement;
+  const lightVal = document.getElementById('env-light-val')!;
+  lightSlider.addEventListener('input', () => {
+    const v = parseFloat(lightSlider.value);
+    engine.config.greenFeed = v;
+    lightVal.textContent = String(Math.round(v));
+  });
 
   // ── Wire viscosity slider ──
   const viscSlider = document.getElementById('env-viscosity') as HTMLInputElement;
@@ -392,8 +406,8 @@ export function createEnvironmentPanel(
 
     if (!type || id === null) {
       el.innerHTML = `
-        <div class="bottom-section-title">Source Properties</div>
-        <span class="env-placeholder">Select a light, temp, or current source</span>
+        <div class="bottom-section-title">Light / Temp / Current</div>
+        <span class="env-placeholder">Select a source to edit</span>
       `;
       return;
     }
@@ -404,8 +418,8 @@ export function createEnvironmentPanel(
     const src = sources.find(s => s.id === id);
     if (!src) {
       el.innerHTML = `
-        <div class="bottom-section-title">Source Properties</div>
-        <span class="env-placeholder">Select a light, temp, or current source</span>
+        <div class="bottom-section-title">Light / Temp / Current</div>
+        <span class="env-placeholder">Select a source to edit</span>
       `;
       return;
     }
