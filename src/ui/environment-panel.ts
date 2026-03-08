@@ -41,17 +41,11 @@ export function injectEnvironmentPanelStyles(): void {
       z-index: 95;
       overflow: hidden;
       transition: height 0.25s ease, left 0.2s ease, right 0.2s ease;
-      font-family: 'Inter', -apple-system, sans-serif;
+      font-family: var(--ui-font);
       color: var(--ui-text);
     }
     #repsim-bottom-panel.expanded {
       height: 170px;
-    }
-    #repsim-bottom-panel.left-collapsed {
-      left: 0;
-    }
-    #repsim-bottom-panel.right-collapsed {
-      right: 0;
     }
 
     #repsim-bottom-toggle {
@@ -59,7 +53,7 @@ export function injectEnvironmentPanelStyles(): void {
       bottom: 0;
       left: 50%;
       transform: translateX(-50%);
-      width: 100px;
+      width: 120px;
       height: 22px;
       background: var(--ui-bg);
       backdrop-filter: blur(12px);
@@ -77,6 +71,7 @@ export function injectEnvironmentPanelStyles(): void {
       letter-spacing: 0.05em;
       text-transform: uppercase;
       color: var(--ui-text-muted);
+      font-family: var(--ui-font);
       transition: bottom 0.25s ease;
     }
     #repsim-bottom-toggle.expanded {
@@ -265,7 +260,7 @@ export function createEnvironmentPanel(
   // ── Build toggle button ──
   const toggle = document.createElement('div');
   toggle.id = 'repsim-bottom-toggle';
-  toggle.textContent = '▲ Environment';
+  toggle.textContent = '▲ Tank Settings';
   document.body.appendChild(toggle);
 
   // ── Build panel ──
@@ -316,18 +311,32 @@ export function createEnvironmentPanel(
     expanded = !expanded;
     panel.classList.toggle('expanded', expanded);
     toggle.classList.toggle('expanded', expanded);
-    toggle.textContent = expanded ? '▼ Environment' : '▲ Environment';
+    toggle.textContent = expanded ? '▼ Tank Settings' : '▲ Tank Settings';
   });
 
-  // ── Watch for side panel collapse ──
-  function checkPanelCollapse(): void {
-    const leftPanel = document.getElementById('repsim-chart-panel');
+  // ── Dynamically track side panel edges ──
+  // Reads the actual rendered position of each side panel so the bottom panel
+  // always sits just inside their inner edges, whether expanded or collapsed.
+  function syncPanelEdges(): void {
+    const leftPanel = document.getElementById('repsim-left-panel');
     const rightPanel = document.getElementById('repsim-right-panel');
-    panel.classList.toggle('left-collapsed', leftPanel?.classList.contains('collapsed') ?? false);
-    panel.classList.toggle('right-collapsed', rightPanel?.classList.contains('collapsed') ?? false);
+
+    // Left edge = right edge of the left panel (0 when collapsed off-screen)
+    const leftRight = leftPanel ? leftPanel.getBoundingClientRect().right : 0;
+    const newLeft = `${Math.max(0, leftRight)}px`;
+
+    // Right edge = distance from right side of viewport to right panel's left edge
+    const vpWidth = window.innerWidth;
+    const rightLeft = rightPanel ? rightPanel.getBoundingClientRect().left : vpWidth;
+    const newRight = `${Math.max(0, vpWidth - rightLeft)}px`;
+
+    if (panel.style.left !== newLeft) panel.style.left = newLeft;
+    if (panel.style.right !== newRight) panel.style.right = newRight;
   }
-  // Check periodically (simpler than MutationObserver for class changes)
-  setInterval(checkPanelCollapse, 300);
+  // Poll edges (simpler than MutationObserver for transition tracking)
+  setInterval(syncPanelEdges, 150);
+  // Also sync immediately on resize
+  window.addEventListener('resize', syncPanelEdges);
 
   // ── Wire viscosity slider ──
   const viscSlider = document.getElementById('env-viscosity') as HTMLInputElement;
