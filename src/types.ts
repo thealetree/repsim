@@ -451,5 +451,6 @@ export interface TankPayload {
   temps?: TemperatureSource[];        // optional
   currents?: CurrentSource[];         // optional
   config?: Partial<SimConfig>;        // optional (only non-default values)
+  dayNight?: { enabled: boolean; speed: number; phase: number }; // optional
   orgs?: OrganismPayload[];           // optional
 }

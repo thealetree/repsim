@@ -416,6 +416,24 @@ export function createEnvironmentPanel(
     dnSpeedVal.textContent = v.toFixed(1);
   });
 
+  // ── Refresh sliders when config/world changes (save slot load, etc.) ──
+  events.on('sim:reset', () => {
+    // Environment sliders
+    lightSlider.value = String(engine.config.greenFeed);
+    lightVal.textContent = String(Math.round(engine.config.greenFeed));
+
+    viscSlider.value = (1 - engine.config.baseViscosity).toFixed(2);
+    viscVal.textContent = (1 - engine.config.baseViscosity).toFixed(2);
+
+    foodDecaySlider.value = String(engine.config.foodDecaySeconds);
+    foodDecayVal.textContent = `${Math.round(engine.config.foodDecaySeconds)}s`;
+
+    // Day/night controls
+    dnToggle.checked = engine.world.dayNightEnabled;
+    dnSpeedSlider.value = String(engine.world.dayNightSpeed);
+    dnSpeedVal.textContent = engine.world.dayNightSpeed.toFixed(1);
+  });
+
   // ── Update phase indicator bar + day/night grayout ──
   const phaseBar = document.getElementById('env-daynight-phase')!;
   const daynightControls = document.getElementById('daynight-controls')!;

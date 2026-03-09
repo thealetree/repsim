@@ -190,6 +190,16 @@ function serializeTank(
       }
     }
     if (Object.keys(cfg).length > 0) payload.config = cfg;
+
+    // Include day/night cycle settings (stored in world, not SimConfig)
+    const w = engine.world;
+    if (w.dayNightEnabled || w.dayNightSpeed !== 0.5) {
+      payload.dayNight = {
+        enabled: w.dayNightEnabled,
+        speed: Math.round(w.dayNightSpeed * 10) / 10,
+        phase: Math.round(w.dayNightPhase * 1000) / 1000,
+      };
+    }
   }
 
   return payload;
@@ -319,6 +329,13 @@ function applyTankPayload(engine: SimulationEngine, payload: TankPayload): void 
     for (const [key, val] of Object.entries(payload.config)) {
       (engine.config as unknown as Record<string, unknown>)[key] = val;
     }
+  }
+
+  // Apply day/night settings
+  if (payload.dayNight) {
+    world.dayNightEnabled = payload.dayNight.enabled;
+    world.dayNightSpeed = payload.dayNight.speed;
+    world.dayNightPhase = payload.dayNight.phase;
   }
 
   // Spawn organisms

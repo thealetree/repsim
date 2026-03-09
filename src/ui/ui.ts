@@ -788,7 +788,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.5.7</div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.5.8</div>
   `;
 
   // Virus section
@@ -1192,6 +1192,26 @@ export function createUI(
     }
     statStrains.textContent = String(aliveStrains);
     statInfected.textContent = String(totalInfected);
+  });
+
+  // ── Refresh all sliders when config changes (save slot load, etc.) ──
+  events.on('sim:reset', () => {
+    // Right-panel config sliders
+    configSliders.forEach((slider) => {
+      const key = slider.dataset.key!;
+      const def = CONFIG_SLIDERS.find(d => d.key === key);
+      let val = (engine.config as unknown as Record<string, number>)[key];
+      if (def?.invert) val = def.min + def.max - val;
+      slider.value = String(val);
+    });
+
+    // Virus controls
+    virusCheckbox.checked = engine.config.virusEnabled;
+    updateVirusToggleVisual(virusCheckbox.checked);
+    virusSliders.forEach((slider) => {
+      const vkey = slider.dataset.vkey! as keyof typeof engine.config;
+      slider.value = String(engine.config[vkey]);
+    });
   });
 
   // ── Organism selection ──
