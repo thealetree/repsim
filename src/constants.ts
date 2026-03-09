@@ -186,7 +186,7 @@ export const YELLOW_DEPTH_IMPULSE = 0.03;        // Depth change per yellow from
 
 export const RED_ATTACK_RANGE = SEGMENT_RADIUS * 4;       // Proximity for attack (was *3=24, now *4=32)
 export const RED_ATTACK_COOLDOWN_TICKS = 12;               // 0.6s between attacks per organism (was 15)
-export const RED_ATTACK_HP_GAIN_FRACTION = 1.0;            // Attacker gains 100% of damage as HP (was 0.75)
+export const RED_ATTACK_HP_GAIN_FRACTION = 3.0;            // Attacker gains 3x damage as HP — makes carnivory highly profitable (was 1.0)
 export const RED_KILL_BONUS = 300;                          // Bonus HP for finishing a segment kill
 
 // ── Organism Kill Reward ──
