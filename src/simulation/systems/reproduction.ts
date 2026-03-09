@@ -47,6 +47,7 @@ import {
   GENE_LENGTH_MIN,
   GENE_LENGTH_MAX,
   SEXUAL_VIGOR_BONUS,
+  SEXUAL_LIFESPAN_BONUS,
   SEXUAL_IMMUNITY_INHERIT_RATE,
   VIRUS_VERTICAL_TRANSMISSION_CHANCE,
   VIRUS_IMMUNITY_INHERITANCE_CHANCE,
@@ -287,6 +288,9 @@ function reproduceSexually(
       child.rootHealthReserveMax,
     );
 
+    // Sexual offspring live longer — reward for the cost of finding a mate
+    child.timedDeathAt = Math.round(child.timedDeathAt + (child.timedDeathAt - world.tick) * (SEXUAL_LIFESPAN_BONUS - 1));
+
     // Virus: vertical transmission from dominant parent + immunity from both
     // Sexual offspring inherit immunity at higher rate (75% vs 50% asexual)
     if (config.virusEnabled) {
@@ -307,8 +311,8 @@ function reproduceSexually(
  * Requirements:
  * - Different organism (not self)
  * - Alive and not already mated this tick
- * - On the same depth layer (same blur layer = same "depth" in the dish)
- * - Root-to-root distance within SEXUAL_REPRO_RANGE (150 units)
+ * - On the same or adjacent depth layer (±1 blur layer)
+ * - Root-to-root distance within SEXUAL_REPRO_RANGE (300 units)
  *
  * Returns the closest valid mate, or null if none found.
  */
@@ -332,8 +336,9 @@ function findMate(
     if (!candidate.alive) continue;
     if (mated.has(candidate.id)) continue;
 
-    // Must be on the same depth layer
-    if (getDepthLayer(candidate.depth) !== orgLayer) continue;
+    // Must be on the same or adjacent depth layer (±1 layer)
+    const candidateLayer = getDepthLayer(candidate.depth);
+    if (Math.abs(candidateLayer - orgLayer) > 1) continue;
 
     // Root-to-root distance check
     const cRootIdx = candidate.firstSegment;

@@ -25,7 +25,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   blueHP: 1000,           // Extra HP per blue segment — doubles base segment health
   yellowFreq: 1.25,       // Seconds between movement — not too twitchy, not too sluggish
   redDamage: 400,         // Damage per attack — kills a normal segment in ~2.5 hits
-  purpleCost: 2500,       // Sexual repro cost per parent — total 5000 vs scaled asexual
+  purpleCost: 1000,       // Sexual repro cost per parent — total 2000 vs scaled asexual (was 2500)
   baseViscosity: 0.5,      // Default maps to VERLET_DAMPING (0.98)
   foodDecaySeconds: 120,   // Food particle lifespan in seconds (slider range 30-300)
 };
@@ -66,7 +66,8 @@ export function getReproThreshold(segCount: number): number {
 }
 
 // ─── Sexual Reproduction Bonuses ────────────────────────────
-export const SEXUAL_VIGOR_BONUS = 1.25;           // 25% extra starting HP for sexually-produced offspring
+export const SEXUAL_VIGOR_BONUS = 4.0;             // 4x starting HP for sexually-produced offspring (was 1.25)
+export const SEXUAL_LIFESPAN_BONUS = 1.5;          // 1.5x lifespan for sexually-produced offspring
 export const SEXUAL_IMMUNITY_INHERIT_RATE = 0.75;  // 75% immunity inheritance (vs 50% asexual)
 
 export const ROOT_DRAIN_INTERVAL_TICKS = 22;    // ~1.1 seconds at 20 ticks/sec (V1: every 1.1s)
@@ -81,7 +82,7 @@ export const REPRO_METER_FILL = 100;            // Amount added per fill tick wh
 export const REPRO_METER_FILL_INTERVAL = 10;    // ~0.5 seconds at 20 ticks/sec
 // REPRO_HEALTH_THRESHOLD — now size-scaled via getReproThreshold()
 // ASEXUAL_REPRO_COST — now size-scaled via getReproCost()
-export const SEXUAL_REPRO_RANGE = 150;           // Root-to-root distance for mate finding (world units)
+export const SEXUAL_REPRO_RANGE = 300;           // Root-to-root distance for mate finding (world units, was 150)
 export const STRUCTURAL_MUTATION_CHANCE = 0.15;  // 15% chance per child of gaining/losing a segment
 
 
@@ -186,7 +187,7 @@ export const YELLOW_DEPTH_IMPULSE = 0.03;        // Depth change per yellow from
 
 export const RED_ATTACK_RANGE = SEGMENT_RADIUS * 4;       // Proximity for attack (was *3=24, now *4=32)
 export const RED_ATTACK_COOLDOWN_TICKS = 12;               // 0.6s between attacks per organism (was 15)
-export const RED_ATTACK_HP_GAIN_FRACTION = 3.0;            // Attacker gains 3x damage as HP — makes carnivory highly profitable (was 1.0)
+export const RED_ATTACK_HP_GAIN_FRACTION = 6.0;            // Attacker gains 6x damage as HP — makes carnivory extremely profitable (was 3.0)
 export const RED_KILL_BONUS = 300;                          // Bonus HP for finishing a segment kill
 
 // ── Organism Kill Reward ──
