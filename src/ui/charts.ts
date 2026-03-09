@@ -322,8 +322,10 @@ export function createChartSystem(
       id: 'population',
       title: 'POPULATION',
       tooltipKey: 'chart-population',
-      draw: (ctx, data, w, h) =>
-        drawLineChart(ctx, data, w, h, s => s.population, 'var(--ui-accent)'),
+      draw: (ctx, data, w, h) => {
+        const accent = getComputedStyle(document.documentElement).getPropertyValue('--ui-accent').trim() || '#ffffff';
+        drawLineChart(ctx, data, w, h, s => s.population, accent);
+      },
     },
     {
       id: 'colors',

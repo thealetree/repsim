@@ -176,7 +176,7 @@ export const GREEN_FEED_INTERVAL_TICKS = 20;    // 1.0s — photosynthesis cycle
 // Each yellow segment fires on its organism's movement timer.
 
 export const YELLOW_THRUST_STRENGTH = 2.5;      // Verlet velocity impulse per yellow segment
-export const YELLOW_MOVEMENT_COST = 25;          // HP cost per yellow segment per thrust
+export const YELLOW_MOVEMENT_COST = 12;          // HP cost per yellow segment per thrust (was 25 — halved to make movement viable for predators)
 export const YELLOW_DEPTH_IMPULSE = 0.03;        // Depth change per yellow from Y-component of thrust
 
 // ─── Red Attack Constants ───────────────────────────────────
@@ -205,7 +205,7 @@ export const VERLET_DAMPING = 0.98;             // Velocity damping per tick (0-
 export const CHAIN_CONSTRAINT_ITERATIONS = 3;   // How many times to enforce chain constraints
 export const SEGMENT_CHAIN_DISTANCE = SEGMENT_RADIUS * 1.6; // Target distance between connected segments (tighter for branch overlap)
 export const COLLISION_PUSH_STRENGTH = 0.8;     // How hard segments push apart on overlap
-export const ANGULAR_CONSTRAINT_STIFFNESS = 0.5; // How strongly organisms hold their genetic shape (per iteration)
+export const ANGULAR_CONSTRAINT_STIFFNESS = 0.7; // How strongly organisms hold their genetic shape (per iteration, was 0.5)
 
 
 // ─── Tank Constants ─────────────────────────────────────────

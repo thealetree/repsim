@@ -485,8 +485,8 @@ function runRedAttack(world: World, config: SimConfig): void {
         const dy = seg.y[j] - seg.y[idx];
         if (dx * dx + dy * dy > attackRangeSq) continue;
 
-        // DEAL DAMAGE (scaled by length — longer = stronger)
-        const damage = config.redDamage * lengthMult;
+        // DEAL DAMAGE — quadratic with red segment length (bigger spikes = disproportionately stronger)
+        const damage = config.redDamage * lengthMult * lengthMult;
         seg.health[j] -= damage;
 
         // Kill bonus: finishing a segment is rewarded
