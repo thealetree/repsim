@@ -786,7 +786,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.5.5</div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.5.6</div>
   `;
 
   // Virus section
@@ -1054,7 +1054,7 @@ export function createUI(
   });
 
   // ── Save & Share section (inserted after organism section) ──
-  const saveShareSection = buildSaveShareSection(engine, renderer, tooltips);
+  const saveShareSection = buildSaveShareSection(engine, renderer, events, tooltips);
   const virusSection = rightPanel.querySelector('[data-section="virus"]');
   if (virusSection) {
     rightPanel.insertBefore(saveShareSection, virusSection);

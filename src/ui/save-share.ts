@@ -14,8 +14,10 @@ import type { SimulationEngine } from '../simulation/engine';
 import type { Renderer } from '../rendering/renderer';
 import type { OrganismPayload, TankPayload, Gene, SimConfig } from '../types';
 import type { TooltipSystem } from './tooltips';
+import type { EventBus } from '../events';
 import { DEFAULT_CONFIG } from '../constants';
-import { spawnOrganismFromGenome, removeOrganism } from '../simulation/world';
+import { spawnOrganismFromGenome, removeOrganism, seedPopulation } from '../simulation/world';
+import { createVirusStrainPool } from '../simulation/virus';
 
 // ─── Base64url Encoding (RFC 4648) ───────────────────────────
 
@@ -58,6 +60,77 @@ async function decompress(b64: string): Promise<string> {
     new DecompressionStream('deflate')
   );
   return await new Response(stream).text();
+}
+
+// ─── Save Slots (localStorage — persists across all sessions) ────────
+
+const SAVE_SLOTS_KEY = 'repsim-save-slots';
+const SLOT_COUNT = 4;
+
+interface SaveSlot {
+  name: string | null;   // null = empty slot
+  data: string | null;   // JSON-stringified TankPayload, null = empty
+}
+
+function createEmptySlots(): SaveSlot[] {
+  return Array.from({ length: SLOT_COUNT }, () => ({ name: null, data: null }));
+}
+
+// Default "Cross" preset — compressed base64url of a TankPayload
+const CROSS_PRESET_COMPRESSED = 'eF6NmU2THDUMhf_LnNuU5e62u_cKRXHgwD2Vw0KWMMVmA8mGj0rlvzMzep7eG3Cyp6RXUtuvZGn38-mP011Mp-f7p19Pd69elVin0l5PuQk2lTV_L2osaixoLGjMasxqzGjMaDQ1mhoNjYZGqBFqBBqBRlWjqlHRqKmxo7Aj31O8p3RDuiHdUrqldCAdSEdKR0o70o60p7Sn1CP0BDlAzs_j8_Q4PM7uemLHprLZWTfWwdpZV9aFdWZtGsoVc_xCiC5QLGEYP7glioyqGWczzkacjTgbcTbibMTZiLMRp1SQCRABHrQJIbpAsYRh_OCWKDKqMM4wziDOIM4gziDOIM4gziDOg5CyDbLBxgkhukCxhGH84JYoblHBZZicPE4W4xav6TR9cnCcWx5bnhpXz83nxee9Qz64l9RL5kFaOJuUTcZCdrieVE-mkyTkSKZIZgjJRW5lamVmkZTkZKZkZqQJbT6TzmSzBcF6QDmgGlhQrCeUE6qJBcl6RDmiGlnQrGeUM6rZnjTZkyV7kmRPjuxJkT0Zsk_5YblPQWolZPBtG6u_O-vKurDOuXIk_EKILtCbJfgc8Dngc8DngM8BnyMZG8nYSMZGMjaSsZGMDTI6yOggo4OMDjI6yOjInI3M2cicjczZyJyNzNmgpgU1LahpQU0LalpQ0yKrVmTViqxakVUrsmpFVq3rXW6s_u6sK-vCOucKBfiFEF2gN0srllcsr1hesbxiecUyieV7ynPKa3pZEKILFEsYvvnp-O347fjt-O347fglbYO8jUzcyMy9LAjRBYolDN_8DPwO_A78DvwO_A78UhSCqhBZFiLrwmVBiC5QLGH4VievFeLYdDerm8XN7OZWgDdRm6hN1CZqE7WJGqKGqCFqiBqihqguqovqorqoLqqLWkWtolZRq6hV1CpqEbWIWkQtohZRi6hZ1CxqFjWLmkXNopqoJqqJaqKaqCYqRIWoEBWiQlSAqoAqmAqkgqgAKvo60Ycu9KAD7fspfokf4nf4GX6FB-Z5eVyeloflWXkt3oqX4p14Jd6Il-_de_XevBfvvUsxGSbB5Jf0OtgVu23Nbl-z29jsdja7rc1ub2OrHPbKQbMcdMuxTyqI0IQ2dZJeN-PYjGMzjs04NuPYjMOmPOzKg7Y86MsvqwoiNKFNnaTXYRzDOIZxDOMYxjGMw_bfKlYoY4U6VihkhUpWKGWFWlYoZsVqZvku1u9iAS9W8GIJL9bwYhEvVvFCGS_U8UIhL1TyQikv1PJCMS9U8-LzVXy_ig9Y8QUrPmHFN6zwTBXeqcJDVXipCk9V4a0qPr_F97f4ABdf4OITXHyDC49w4RUuPMOFd7jwEBde4tKOUeOYNY5h45g2jnHjmDeOgeOYOBw5nDkcOpw6HDucOxw8nDwcJZqzRHOYaE4TzXGiOU80B4rmRNEYKRozRWOoaEwVjbGiMVc0BovGZNGqcVTjqMZRjaMaRzUO5-jmHN2YoxtzdKuTCiI0oU2d5F1f4g83zc3sZnGzuuluDvjmJoekqsGqwarBqsGqwarBqsGqwYrBHXs75vbJNsK-wkbDzsNWJA3t2Nmws012HzYWdhq2HvYiNidpZ8POwM6Y7EdsNew9bEbsTmxX0s7ATsdOn-xQbD7sRmxP7FdsYNJOx86KnXWyZ7EdsT-xYbGDsaVJOyt2Fuwsk12MDYodiy2MPY1NTtpZsDNP_lHEvsaWxR7GpsYux7Yn-ONF-FeBYG2sM-vCurJ21sHKHxfCqT1YG-vMurCurJ11sDL83-xAa0gNpSE0dIbMUBkiQ2OiIAhiIAQiIAD84x7vHAZnwVFwEhwE58AxcAocAnfClXAjXAj3wXVwG1wGdwE1YAbEgBfQAlZACjgBJWAoBIWf0BN2Qk64CTVhJolCnpAmZAlJQo6QImSICXLt58JNZaME6haoXKB2geoF6hdSgczgF0J0gWIJw6ZWNgIvffdL4_3Seb-03i-9t81x_uV0HLt-7NZjtxy7-dhZ0i8F_7C3HzsrrdJ6SKvSXeGubFe0KdoUbYqGoqFoKOqKuqKuaFW0KloVLYoWRYuiWdGsaFbUFDVF7fjq46OPb0bkcXgYHoUIAerrRB-6MC7DMio_xS_xQ_x6P95v98A8rzyu19Pp8fz2l-ePp7tXn0_nN7d_Dfx1urvQoC_T6e_Lblmn04f7N-dPF52t1ul0fnp-ePp4fr4I48uUqAZq1Bso2jr-B2q-oaKNfkNdupr_xizGt2V4Mdfl32CXL_zp_dPP57enu8-nDw-_ff3-09PzRVCvmpff35_fnY_fPz5-evjuh8uv9frr74fHx_d_fvvh4ffTXf2qXc_h4c039-_u3z6c7sZav3z5B_cA4pc';
+
+async function loadSaveSlots(): Promise<SaveSlot[]> {
+  const raw = localStorage.getItem(SAVE_SLOTS_KEY);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as SaveSlot[];
+      if (Array.isArray(parsed) && parsed.length === SLOT_COUNT) return parsed;
+    } catch { /* corrupted, re-initialize */ }
+  }
+  // First visit: decompress Cross preset for slot 1
+  const slots = createEmptySlots();
+  try {
+    const json = await decompress(CROSS_PRESET_COMPRESSED);
+    slots[0] = { name: 'Cross', data: json };
+  } catch {
+    console.warn('Failed to decompress Cross preset');
+  }
+  persistSlots(slots);
+  return slots;
+}
+
+function persistSlots(slots: SaveSlot[]): void {
+  try {
+    localStorage.setItem(SAVE_SLOTS_KEY, JSON.stringify(slots));
+  } catch { /* quota exceeded */ }
+}
+
+/** Flush all organisms, food, viruses WITHOUT reseeding. Used before loading a save slot. */
+function flushWithoutReseed(engine: SimulationEngine): void {
+  const w = engine.world;
+  const idsToRemove: number[] = [];
+  for (const [id, org] of w.organisms) {
+    if (org.alive) idsToRemove.push(id);
+  }
+  for (const id of idsToRemove) {
+    removeOrganism(w, id);
+  }
+  w.organisms.clear();
+
+  const food = w.food;
+  food.count = 0;
+  food.alive.fill(0);
+  food.freeSlots.length = 0;
+  for (let i = food.x.length - 1; i >= 0; i--) {
+    food.freeSlots.push(i);
+  }
+
+  w.virusStrains = createVirusStrainPool();
+  w.freeSegmentSlots.length = 0;
+  w.segmentCount = 0;
+  w.stats.population = 0;
+  w.stats.births = 0;
+  w.stats.deaths = 0;
 }
 
 // ─── Organism Serialization ──────────────────────────────────
@@ -309,6 +382,7 @@ function showToast(message: string): void {
 export function buildSaveShareSection(
   engine: SimulationEngine,
   renderer: Renderer,
+  events: EventBus,
   tooltips?: TooltipSystem,
 ): HTMLElement {
   const section = document.createElement('div');
@@ -382,6 +456,165 @@ export function buildSaveShareSection(
   loadContainer.appendChild(loadInput);
   loadContainer.appendChild(loadBtn);
   body.appendChild(loadContainer);
+
+  // ── Save Slots UI ──
+  const slotsContainer = document.createElement('div');
+  slotsContainer.style.cssText = 'margin-top:10px;border-top:1px solid var(--ui-border);padding-top:8px;';
+
+  const slotsLabel = document.createElement('div');
+  slotsLabel.style.cssText = 'font-size:10px;color:var(--ui-text-dim);margin-bottom:6px;font-weight:500;';
+  slotsLabel.textContent = 'Save Slots';
+  slotsContainer.appendChild(slotsLabel);
+
+  const slotElements: { nameEl: HTMLSpanElement; saveBtn: HTMLButtonElement; loadBtn: HTMLButtonElement }[] = [];
+
+  for (let i = 0; i < SLOT_COUNT; i++) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:4px;margin-bottom:4px;';
+
+    const numEl = document.createElement('span');
+    numEl.style.cssText = 'font-size:10px;color:var(--ui-text-muted);width:12px;flex-shrink:0;';
+    numEl.textContent = `${i + 1}`;
+
+    const nameEl = document.createElement('span');
+    nameEl.style.cssText = 'flex:1;min-width:0;font-size:10px;color:var(--ui-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;padding:2px 4px;border-radius:3px;font-style:italic;';
+    nameEl.textContent = 'Empty';
+    nameEl.title = 'Click to rename';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'ui-btn';
+    saveBtn.textContent = 'Save';
+    saveBtn.style.cssText = 'font-size:9px;padding:2px 6px;flex-shrink:0;';
+
+    const slotLoadBtn = document.createElement('button');
+    slotLoadBtn.className = 'ui-btn';
+    slotLoadBtn.textContent = 'Load';
+    slotLoadBtn.style.cssText = 'font-size:9px;padding:2px 6px;flex-shrink:0;';
+    slotLoadBtn.disabled = true;
+    slotLoadBtn.style.opacity = '0.4';
+
+    row.appendChild(numEl);
+    row.appendChild(nameEl);
+    row.appendChild(saveBtn);
+    row.appendChild(slotLoadBtn);
+    slotsContainer.appendChild(row);
+
+    slotElements.push({ nameEl, saveBtn, loadBtn: slotLoadBtn });
+  }
+
+  body.appendChild(slotsContainer);
+
+  // Slot state management
+  let slots: SaveSlot[] = createEmptySlots();
+
+  function renderSlots(): void {
+    for (let i = 0; i < SLOT_COUNT; i++) {
+      const slot = slots[i];
+      const el = slotElements[i];
+      const isEmpty = slot.name === null;
+      el.nameEl.textContent = isEmpty ? 'Empty' : slot.name!;
+      el.nameEl.style.fontStyle = isEmpty ? 'italic' : 'normal';
+      el.nameEl.style.color = isEmpty ? 'var(--ui-text-muted)' : 'var(--ui-text)';
+      el.loadBtn.disabled = isEmpty;
+      el.loadBtn.style.opacity = isEmpty ? '0.4' : '1';
+    }
+  }
+
+  // Save handlers
+  for (let i = 0; i < SLOT_COUNT; i++) {
+    slotElements[i].saveBtn.addEventListener('click', () => {
+      const payload = serializeTank(
+        engine,
+        checkboxes['share-lights'].checked,
+        checkboxes['share-temps'].checked,
+        checkboxes['share-currs'].checked,
+        checkboxes['share-config'].checked,
+      );
+      if (slots[i].name === null) {
+        const now = new Date();
+        slots[i].name = `Save ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      }
+      slots[i].data = JSON.stringify(payload);
+      persistSlots(slots);
+      renderSlots();
+      showToast(`Saved to slot ${i + 1}`);
+    });
+  }
+
+  // Load handlers
+  for (let i = 0; i < SLOT_COUNT; i++) {
+    slotElements[i].loadBtn.addEventListener('click', () => {
+      const slot = slots[i];
+      if (!slot.data) return;
+      try {
+        const payload = JSON.parse(slot.data) as TankPayload;
+        if (!payload || payload.v !== 1) { showToast('Invalid save data'); return; }
+
+        // Flush without reseed, apply saved state, then seed fresh organisms
+        flushWithoutReseed(engine);
+        applyTankPayload(engine, payload);
+        renderer.setWallsDirty();
+        engine.world.tankCellsDirty = true;
+        engine.world.tankCellsArray = [...engine.world.tankCells];
+        seedPopulation(engine.world, engine.config);
+
+        // Reset selection state
+        renderer.selectedOrganismId = null;
+        renderer.selectedSourceType = null;
+        renderer.selectedSourceId = null;
+        events.emit('organism:selected', { id: null });
+        events.emit('source:selected', { type: null, id: null });
+        events.emit('sim:reset', undefined);
+
+        showToast(`Loaded: ${slot.name}`);
+      } catch {
+        showToast('Failed to load save data');
+      }
+    });
+  }
+
+  // Name editing (click to rename)
+  for (let i = 0; i < SLOT_COUNT; i++) {
+    slotElements[i].nameEl.addEventListener('mouseenter', () => {
+      if (slots[i].name !== null) slotElements[i].nameEl.style.background = 'var(--ui-surface)';
+    });
+    slotElements[i].nameEl.addEventListener('mouseleave', () => {
+      slotElements[i].nameEl.style.background = 'none';
+    });
+    slotElements[i].nameEl.addEventListener('click', () => {
+      if (slots[i].name === null) return;
+      const nameEl = slotElements[i].nameEl;
+      const currentName = slots[i].name!;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = currentName;
+      input.maxLength = 20;
+      input.style.cssText = 'width:100%;box-sizing:border-box;font-family:var(--ui-font);font-size:10px;padding:1px 4px;background:var(--ui-surface);border:1px solid var(--ui-accent);border-radius:3px;color:var(--ui-text);outline:none;';
+      nameEl.textContent = '';
+      nameEl.appendChild(input);
+      input.focus();
+      input.select();
+      let committed = false;
+      function commit(): void {
+        if (committed) return;
+        committed = true;
+        slots[i].name = input.value.trim() || currentName;
+        persistSlots(slots);
+        renderSlots();
+      }
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') commit();
+        if (e.key === 'Escape') { committed = true; renderSlots(); }
+      });
+    });
+  }
+
+  // Async initialization — load slots from localStorage (or decompress Cross preset)
+  loadSaveSlots().then(loaded => {
+    slots = loaded;
+    renderSlots();
+  });
 
   // Accordion toggle
   header.addEventListener('click', () => {
