@@ -778,6 +778,15 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
       <span class="hint-kbd">Shift+click</span> Sculpt tank<br>
       <span class="hint-kbd">Alt+Scroll</span> Focus depth
     </div>
+    <div id="repsim-tooltips-row" style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;margin-top:6px">
+      <span style="font-size:11px;color:var(--ui-text-dim)">Tooltips</span>
+      <label style="position:relative;display:inline-block;width:32px;height:18px;cursor:pointer">
+        <input type="checkbox" id="repsim-tooltips-checkbox" checked style="opacity:0;width:0;height:0">
+        <span style="position:absolute;inset:0;background:var(--ui-slider-track);border-radius:9px;transition:background 0.2s"></span>
+        <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
+      </label>
+    </div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.5.0</div>
   `;
 
   // Virus section
@@ -1296,22 +1305,25 @@ export function createUI(
     const topFocusGroup = topBar.querySelector('.top-focus-group');
     if (topFocusGroup) tooltips.attach(topFocusGroup as HTMLElement, 'focus-slider');
 
-    // Tooltips ON/OFF toggle in Controls section
-    const controlsBody = rightPanel.querySelector('[data-body="controls"]');
-    if (controlsBody) {
-      const toggleRow = document.createElement('div');
-      toggleRow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:4px 0;margin-top:6px;';
-      toggleRow.innerHTML = `
-        <span style="font-size:11px;color:var(--ui-text-dim)">Tooltips</span>
-        <label class="toggle-wrap" style="cursor:pointer">
-          <input type="checkbox" ${tooltips.isEnabled() ? 'checked' : ''} style="display:none">
-          <span class="toggle-track"><span class="toggle-dot"></span></span>
-        </label>
-      `;
-      const checkbox = toggleRow.querySelector('input')!;
-      checkbox.addEventListener('change', () => tooltips.setEnabled(checkbox.checked));
-      controlsBody.appendChild(toggleRow);
-      tooltips.attach(toggleRow, 'tooltips-toggle');
+    // Tooltips ON/OFF toggle in Controls section (HTML is in controlsContent template)
+    const tooltipCheckbox = document.getElementById('repsim-tooltips-checkbox') as HTMLInputElement | null;
+    const tooltipDot = document.getElementById('repsim-tooltips-dot');
+    if (tooltipCheckbox) {
+      tooltipCheckbox.checked = tooltips.isEnabled();
+      // Sync dot style on load
+      if (tooltipDot) {
+        tooltipDot.style.left = tooltipCheckbox.checked ? '16px' : '2px';
+        tooltipDot.style.background = tooltipCheckbox.checked ? 'var(--ui-accent)' : 'var(--ui-text-muted)';
+      }
+      tooltipCheckbox.addEventListener('change', () => {
+        tooltips.setEnabled(tooltipCheckbox.checked);
+        if (tooltipDot) {
+          tooltipDot.style.left = tooltipCheckbox.checked ? '16px' : '2px';
+          tooltipDot.style.background = tooltipCheckbox.checked ? 'var(--ui-accent)' : 'var(--ui-text-muted)';
+        }
+      });
+      const tooltipRow = document.getElementById('repsim-tooltips-row');
+      if (tooltipRow) tooltips.attach(tooltipRow, 'tooltips-toggle');
     }
   }
 }
