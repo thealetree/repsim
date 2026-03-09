@@ -156,7 +156,7 @@ export const COLOR_LENGTH_RANGES: Record<number, [number, number]> = {
   0: [0.6, 2.0],   // Green: moderate (leaves/canopy)
   1: [1.0, 3.0],   // Blue: longest (backbone/scaffold)
   2: [1.0, 2.8],   // Yellow: long (flagella/fins)
-  3: [0.4, 1.2],   // Red: short (compact thorns/spikes)
+  3: [0.6, 2.4],   // Red: wide range — bigger spikes = quadratically more damage
   4: [0.5, 0.8],   // Black: shortest (compact reproductive)
   5: [0.6, 1.4],   // White: moderate (scavenger)
 };
