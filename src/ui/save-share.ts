@@ -600,11 +600,13 @@ export function injectSaveShareStyles(): void {
   document.head.appendChild(style);
 }
 
-// ─── Auto-Save / Auto-Restore (localStorage) ─────────────────
+// ─── Auto-Save / Auto-Restore (sessionStorage) ─────────────────
+// Uses sessionStorage so saves survive mobile background tab refreshes
+// but new tabs/windows/sessions always start fresh.
 
 const AUTOSAVE_KEY = 'repsim-autosave';
 
-/** Save current world state to localStorage (called every 15s) */
+/** Save current world state to sessionStorage (called every 15s) */
 export function autoSave(engine: SimulationEngine): void {
   try {
     const payload = serializeTank(engine, true, true, true, true);
@@ -618,16 +620,16 @@ export function autoSave(engine: SimulationEngine): void {
     }
     payload.orgs = orgs;
 
-    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
+    sessionStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
   } catch {
     // Silently fail (quota exceeded, etc.)
   }
 }
 
-/** Restore world state from localStorage. Returns true if restored. */
+/** Restore world state from sessionStorage. Returns true if restored. */
 export function autoRestore(engine: SimulationEngine): boolean {
   try {
-    const json = localStorage.getItem(AUTOSAVE_KEY);
+    const json = sessionStorage.getItem(AUTOSAVE_KEY);
     if (!json) return false;
 
     const payload = JSON.parse(json) as TankPayload;
@@ -662,5 +664,5 @@ export function autoRestore(engine: SimulationEngine): boolean {
 
 /** Clear autosave data (called on New Tank) */
 export function clearAutoSave(): void {
-  localStorage.removeItem(AUTOSAVE_KEY);
+  sessionStorage.removeItem(AUTOSAVE_KEY);
 }

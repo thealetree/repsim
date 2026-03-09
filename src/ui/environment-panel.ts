@@ -489,8 +489,8 @@ export function createEnvironmentPanel(
       html += `
         <div class="env-slider-row">
           <span class="env-slider-label">Intensity</span>
-          <input type="range" id="src-intensity" min="0" max="1" step="0.05" value="${ls.intensity}">
-          <span class="env-slider-val" id="src-intensity-val">${ls.intensity.toFixed(2)}</span>
+          <input type="range" id="src-intensity" min="0" max="100" step="1" value="${Math.round(ls.intensity * 100)}">
+          <span class="env-slider-val" id="src-intensity-val">${Math.round(ls.intensity * 100)}</span>
         </div>
       `;
     } else if (type === 'temperature') {
@@ -567,14 +567,19 @@ export function createEnvironmentPanel(
       }
     });
 
-    // Intensity (light/temp)
+    // Intensity (light uses 0–100 display scale, temp uses -1 to 1)
     const intensitySlider = document.getElementById('src-intensity') as HTMLInputElement | null;
     const intensityVal = document.getElementById('src-intensity-val');
     intensitySlider?.addEventListener('input', () => {
       const src = sources.find(s => s.id === id) as LightSource | TemperatureSource | undefined;
       if (src) {
-        src.intensity = parseFloat(intensitySlider.value);
-        if (intensityVal) intensityVal.textContent = src.intensity.toFixed(2);
+        if (type === 'light') {
+          src.intensity = parseFloat(intensitySlider.value) / 100;
+          if (intensityVal) intensityVal.textContent = Math.round(src.intensity * 100).toString();
+        } else {
+          src.intensity = parseFloat(intensitySlider.value);
+          if (intensityVal) intensityVal.textContent = src.intensity.toFixed(2);
+        }
       }
     });
 
