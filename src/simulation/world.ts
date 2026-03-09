@@ -38,6 +38,9 @@ import {
   BLUR_LAYER_COUNT,
   BRANCH_PROBABILITY,
   FOOD_ENERGY_PER_SEGMENT,
+  ORGANISM_KILL_ENERGY_FRACTION,
+  ORGANISM_KILL_FOOD_REDUCTION,
+  ORGANISM_KILL_MIN_ENERGY,
   PREFERRED_ANGLE_CHANCE,
   PREFERRED_ANGLE_JITTER,
   COLOR_PREFERRED_ANGLES,
@@ -503,6 +506,7 @@ export function spawnOrganismFromGenome(
     lastAttackTick: 0,
     topology,
     fingerprint,
+    killedByOrgId: -1,
   };
 
   // ─── Place segments in a TREE ───
@@ -690,6 +694,25 @@ export function removeOrganism(world: World, id: number): void {
     }
   }
 
+  // ── Energy-on-Kill: transfer stored energy to the killer ──
+  const wasKilledByPredator = org.killedByOrgId >= 0;
+  if (wasKilledByPredator) {
+    const killer = world.organisms.get(org.killedByOrgId);
+    if (killer && killer.alive) {
+      const transferAmount = Math.max(
+        ORGANISM_KILL_MIN_ENERGY,
+        org.rootHealthReserve * ORGANISM_KILL_ENERGY_FRACTION,
+      );
+      killer.rootHealthReserve += transferAmount;
+      killer.rootHealthReserve = Math.min(killer.rootHealthReserve, killer.rootHealthReserveMax);
+    }
+  }
+
+  // Food energy per particle: reduced when killed by predator (anti-double-dipping)
+  const foodEnergy = wasKilledByPredator
+    ? FOOD_ENERGY_PER_SEGMENT * ORGANISM_KILL_FOOD_REDUCTION
+    : FOOD_ENERGY_PER_SEGMENT;
+
   let cx = 0, cy = 0, aliveCount = 0;
   for (let i = 0; i < org.segmentCount; i++) {
     const idx = org.firstSegment + i;
@@ -704,9 +727,9 @@ export function removeOrganism(world: World, id: number): void {
       cy += seg.y[idx];
       aliveCount++;
 
-      // Drop food particle — viral (with strain color) if organism was infected
+      // Drop food particle — reduced energy if killed by red; viral color if infected
       spawnFood(world.food, seg.x[idx], seg.y[idx],
-        FOOD_ENERGY_PER_SEGMENT, seg.segmentDepth[idx], world.tick, viralFoodColor);
+        foodEnergy, seg.segmentDepth[idx], world.tick, viralFoodColor);
     }
   }
   if (aliveCount > 0) {

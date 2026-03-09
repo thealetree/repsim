@@ -238,6 +238,10 @@ export interface Organism {
   // Species fingerprint — hash of genome structure, computed once at spawn.
   // Used by charts for O(1) species diversity counting instead of per-sample recomputation.
   fingerprint: string;
+
+  // ID of the organism whose red attack killed this organism (-1 = natural death).
+  // Set during runRedAttack, read by removeOrganism to transfer energy.
+  killedByOrgId: number;
 }
 
 

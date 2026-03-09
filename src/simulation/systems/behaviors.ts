@@ -105,6 +105,11 @@ const _timedToRemove: number[] = [];
  * - Death removals happen before constraint iteration
  */
 export function runBehaviors(world: World, config: SimConfig): void {
+  // Reset kill tracking — only kills from THIS tick's runRedAttack trigger energy transfer
+  for (const org of world.organisms.values()) {
+    org.killedByOrgId = -1;
+  }
+
   // Compute depth layers once for all systems this tick
   computeDepthLayers(world);
 
@@ -487,6 +492,12 @@ function runRedAttack(world: World, config: SimConfig): void {
         // Kill bonus: finishing a segment is rewarded
         if (seg.health[j] <= 0) {
           org.rootHealthReserve += RED_KILL_BONUS;
+
+          // Mark the victim organism so energy-on-kill fires in removeOrganism
+          const victimOrg = world.organisms.get(seg.organismId[j]);
+          if (victimOrg && victimOrg.alive) {
+            victimOrg.killedByOrgId = org.id;
+          }
         }
 
         // Attacker gains HP (predator-prey reward)
