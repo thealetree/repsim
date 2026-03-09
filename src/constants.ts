@@ -177,7 +177,7 @@ export const GREEN_FEED_INTERVAL_TICKS = 20;    // 1.0s — photosynthesis cycle
 // Each yellow segment fires on its organism's movement timer.
 
 export const YELLOW_THRUST_STRENGTH = 2.5;      // Verlet velocity impulse per yellow segment
-export const YELLOW_MOVEMENT_COST = 12;          // HP cost per yellow segment per thrust (was 25 — halved to make movement viable for predators)
+export const YELLOW_MOVEMENT_COST = 6;            // HP cost per yellow segment per thrust (was 12 — halved again for even cheaper movement)
 export const YELLOW_DEPTH_IMPULSE = 0.03;        // Depth change per yellow from Y-component of thrust
 
 // ─── Red Attack Constants ───────────────────────────────────

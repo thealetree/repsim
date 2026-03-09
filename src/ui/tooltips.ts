@@ -32,6 +32,7 @@ const TOOLTIP_TEXTS: Record<string, string> = {
   'speed-8': '8× speed (may affect performance with many organisms)',
 
   // Top bar buttons
+  'empty': 'Remove all organisms without repopulating — keeps tank shape, lights, and settings',
   'flush': 'Kill all organisms and reseed — keeps tank shape, lights, and settings',
   'new-tank': 'Reset everything with a fresh tank and population',
   'theme-toggle': 'Switch between dark and light theme',

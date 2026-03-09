@@ -105,8 +105,8 @@ function persistSlots(slots: SaveSlot[]): void {
   } catch { /* quota exceeded */ }
 }
 
-/** Flush all organisms, food, viruses WITHOUT reseeding. Used before loading a save slot. */
-function flushWithoutReseed(engine: SimulationEngine): void {
+/** Flush all organisms, food, viruses WITHOUT reseeding. Used before loading a save slot or emptying. */
+export function flushWithoutReseed(engine: SimulationEngine): void {
   const w = engine.world;
   const idsToRemove: number[] = [];
   for (const [id, org] of w.organisms) {
@@ -793,6 +793,175 @@ export function createSpawnInput(engine: SimulationEngine): HTMLElement {
     if (e.key === 'Enter') spawnFromURL();
   });
 
+  return container;
+}
+
+// ─── Organism Save Slots (localStorage — persists across all sessions) ────
+
+const ORG_SAVE_SLOTS_KEY = 'repsim-org-save-slots';
+const ORG_SLOT_COUNT = 4;
+
+interface OrgSaveSlot {
+  name: string | null;
+  data: string | null;   // JSON-stringified OrganismPayload
+}
+
+function createEmptyOrgSlots(): OrgSaveSlot[] {
+  return Array.from({ length: ORG_SLOT_COUNT }, () => ({ name: null, data: null }));
+}
+
+function loadOrgSaveSlots(): OrgSaveSlot[] {
+  const raw = localStorage.getItem(ORG_SAVE_SLOTS_KEY);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as OrgSaveSlot[];
+      if (Array.isArray(parsed) && parsed.length === ORG_SLOT_COUNT) return parsed;
+    } catch { /* corrupted, re-initialize */ }
+  }
+  return createEmptyOrgSlots();
+}
+
+function persistOrgSlots(slots: OrgSaveSlot[]): void {
+  try {
+    localStorage.setItem(ORG_SAVE_SLOTS_KEY, JSON.stringify(slots));
+  } catch { /* quota exceeded */ }
+}
+
+export function buildOrganismSlots(
+  engine: SimulationEngine,
+  getSelectedId: () => number | null,
+): HTMLElement {
+  const container = document.createElement('div');
+  container.style.cssText = 'margin-top:8px;border-top:1px solid var(--ui-border);padding-top:8px;';
+
+  const label = document.createElement('div');
+  label.style.cssText = 'font-size:10px;color:var(--ui-text-dim);margin-bottom:6px;font-weight:500;';
+  label.textContent = 'Organism Slots';
+  container.appendChild(label);
+
+  const slotElements: { nameEl: HTMLSpanElement; saveBtn: HTMLButtonElement; loadBtn: HTMLButtonElement }[] = [];
+
+  for (let i = 0; i < ORG_SLOT_COUNT; i++) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:4px;margin-bottom:4px;';
+
+    const numEl = document.createElement('span');
+    numEl.style.cssText = 'font-size:10px;color:var(--ui-text-muted);width:12px;flex-shrink:0;';
+    numEl.textContent = `${i + 1}`;
+
+    const nameEl = document.createElement('span');
+    nameEl.style.cssText = 'flex:1;min-width:0;font-size:10px;color:var(--ui-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;padding:2px 4px;border-radius:3px;font-style:italic;';
+    nameEl.textContent = 'Empty';
+    nameEl.title = 'Click to rename';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'ui-btn';
+    saveBtn.textContent = 'Save';
+    saveBtn.style.cssText = 'font-size:9px;padding:2px 6px;flex-shrink:0;';
+
+    const slotLoadBtn = document.createElement('button');
+    slotLoadBtn.className = 'ui-btn';
+    slotLoadBtn.textContent = 'Load';
+    slotLoadBtn.style.cssText = 'font-size:9px;padding:2px 6px;flex-shrink:0;';
+    slotLoadBtn.disabled = true;
+    slotLoadBtn.style.opacity = '0.4';
+
+    row.appendChild(numEl);
+    row.appendChild(nameEl);
+    row.appendChild(saveBtn);
+    row.appendChild(slotLoadBtn);
+    container.appendChild(row);
+
+    slotElements.push({ nameEl, saveBtn, loadBtn: slotLoadBtn });
+  }
+
+  // Slot state management
+  let slots = loadOrgSaveSlots();
+
+  function renderSlots(): void {
+    for (let i = 0; i < ORG_SLOT_COUNT; i++) {
+      const slot = slots[i];
+      const el = slotElements[i];
+      const isEmpty = slot.name === null;
+      el.nameEl.textContent = isEmpty ? 'Empty' : slot.name!;
+      el.nameEl.style.fontStyle = isEmpty ? 'italic' : 'normal';
+      el.nameEl.style.color = isEmpty ? 'var(--ui-text-muted)' : 'var(--ui-text)';
+      el.loadBtn.disabled = isEmpty;
+      el.loadBtn.style.opacity = isEmpty ? '0.4' : '1';
+    }
+  }
+
+  // Save handlers
+  for (let i = 0; i < ORG_SLOT_COUNT; i++) {
+    slotElements[i].saveBtn.addEventListener('click', () => {
+      const orgId = getSelectedId();
+      if (orgId === null) { showToast('Select an organism first'); return; }
+      const org = engine.world.organisms.get(orgId);
+      if (!org?.alive) { showToast('Selected organism is not alive'); return; }
+
+      const payload = serializeOrganism(org.genome, org.generation, org.name);
+      slots[i].data = JSON.stringify(payload);
+      slots[i].name = slots[i].name ?? org.name;
+      persistOrgSlots(slots);
+      renderSlots();
+      showToast(`Saved "${org.name}" to slot ${i + 1}`);
+    });
+  }
+
+  // Load handlers
+  for (let i = 0; i < ORG_SLOT_COUNT; i++) {
+    slotElements[i].loadBtn.addEventListener('click', () => {
+      const slot = slots[i];
+      if (!slot.data) return;
+      try {
+        const payload = JSON.parse(slot.data) as OrganismPayload;
+        if (!payload || payload.v !== 1 || !payload.g) { showToast('Invalid save data'); return; }
+        applyOrganismPayload(engine, payload);
+        showToast(`Spawned: ${slot.name}`);
+      } catch {
+        showToast('Failed to load organism');
+      }
+    });
+  }
+
+  // Name editing (click to rename)
+  for (let i = 0; i < ORG_SLOT_COUNT; i++) {
+    slotElements[i].nameEl.addEventListener('mouseenter', () => {
+      if (slots[i].name !== null) slotElements[i].nameEl.style.background = 'var(--ui-surface)';
+    });
+    slotElements[i].nameEl.addEventListener('mouseleave', () => {
+      slotElements[i].nameEl.style.background = 'none';
+    });
+    slotElements[i].nameEl.addEventListener('click', () => {
+      if (slots[i].name === null) return;
+      const nameEl = slotElements[i].nameEl;
+      const currentName = slots[i].name!;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = currentName;
+      input.maxLength = 20;
+      input.style.cssText = 'width:100%;box-sizing:border-box;font-family:var(--ui-font);font-size:10px;padding:1px 4px;background:var(--ui-surface);border:1px solid var(--ui-accent);border-radius:3px;color:var(--ui-text);outline:none;';
+      nameEl.textContent = '';
+      nameEl.appendChild(input);
+      input.focus();
+      input.select();
+      let committed = false;
+      function commit(): void {
+        if (committed) return;
+        committed = true;
+        slots[i].name = input.value.trim() || currentName;
+        persistOrgSlots(slots);
+        renderSlots();
+      }
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') commit();
+        if (e.key === 'Escape') { committed = true; renderSlots(); }
+      });
+    });
+  }
+
+  renderSlots();
   return container;
 }
 

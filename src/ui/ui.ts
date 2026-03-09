@@ -18,7 +18,7 @@ import {
   DEFAULT_CONFIG,
 } from '../constants';
 import { createSpontaneousStrain, infectSegment } from '../simulation/virus';
-import { buildSaveShareSection, createShareButton, createSpawnInput, clearAutoSave } from './save-share';
+import { buildSaveShareSection, createShareButton, createSpawnInput, buildOrganismSlots, flushWithoutReseed, clearAutoSave } from './save-share';
 
 // ─── Color names for display ──────────────────────────────────
 const COLOR_NAMES: Record<number, string> = {
@@ -183,6 +183,7 @@ function injectStyles(): void {
     .btn-group { display: flex; align-items: center; }
     .btn-group .ui-btn { border-radius: 0; }
     .btn-group .btn-group-left { border-radius: 6px 0 0 6px; border-right: none; }
+    .btn-group .btn-group-middle { border-right: none; }
     .btn-group .btn-group-right { border-radius: 0 6px 6px 0; }
 
     #repsim-speed-controls {
@@ -725,7 +726,8 @@ function buildTopBar(): HTMLElement {
         <input type="range" id="focus-slider" min="0" max="1" step="0.02" value="1" class="top-focus-slider">
       </div>
       <div class="btn-group">
-        <button class="ui-btn btn-group-left" id="repsim-flush" title="Flush">Flush</button>
+        <button class="ui-btn btn-group-left" id="repsim-empty" title="Empty">Empty</button>
+        <button class="ui-btn btn-group-middle" id="repsim-flush" title="Flush">Flush</button>
         <button class="ui-btn btn-group-right" id="repsim-new-tank" title="New">New</button>
       </div>
       <div id="repsim-speed-controls">
@@ -786,7 +788,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.5.6</div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.5.7</div>
   `;
 
   // Virus section
@@ -960,7 +962,15 @@ export function createUI(
     });
   });
 
-  // ── Flush (kill all organisms, keep tank/config) ──
+  // ── Empty (kill all organisms, keep tank/config, do NOT reseed) ──
+  document.getElementById('repsim-empty')!.addEventListener('click', () => {
+    flushWithoutReseed(engine);
+    renderer.selectedOrganismId = null;
+    events.emit('organism:selected', { id: null });
+    events.emit('sim:reset', undefined);
+  });
+
+  // ── Flush (kill all organisms, keep tank/config, reseed fresh) ──
   document.getElementById('repsim-flush')!.addEventListener('click', () => {
     engine.flush();
     renderer.selectedOrganismId = null;
@@ -1200,6 +1210,10 @@ export function createUI(
   const spawnInput = createSpawnInput(engine);
   orgInfoEl.parentElement!.appendChild(spawnInput);
 
+  // Organism save slots (persistent across sessions)
+  const orgSlots = buildOrganismSlots(engine, () => renderer.selectedOrganismId);
+  orgInfoEl.parentElement!.appendChild(orgSlots);
+
   function updateOrgInfo(org: Organism | undefined): void {
     orgInfoEl.innerHTML = renderOrganismInfo(org);
     shareBtn.style.display = org?.alive ? '' : 'none';
@@ -1273,6 +1287,8 @@ export function createUI(
     // New Tank + Theme toggle
     const newTank = document.getElementById('repsim-new-tank');
     const flushBtn = document.getElementById('repsim-flush');
+    const emptyBtn = document.getElementById('repsim-empty');
+    if (emptyBtn) tooltips.attach(emptyBtn, 'empty');
     if (flushBtn) tooltips.attach(flushBtn, 'flush');
     if (newTank) tooltips.attach(newTank, 'new-tank');
     const themeBtn = document.getElementById('repsim-theme-toggle');
