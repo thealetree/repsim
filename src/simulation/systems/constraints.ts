@@ -405,6 +405,21 @@ export function resolveCollisions(world: World): void {
 
           seg.x[j] += pushX;
           seg.y[j] += pushY;
+
+          // ROTATIONAL IMPULSE: The collision force is off-center relative to
+          // each organism's root, so it should create torque (spin). Without this,
+          // collisions only translate organisms and they get locked in fixed
+          // orientations. We add a tangential velocity component to the colliding
+          // segment's prevPos — cheap (just a cross product + scale).
+          const tangentScale = 0.3; // Fraction of push converted to spin
+          // Tangent of push = perpendicular to push direction
+          const tanX = -pushY * tangentScale;
+          const tanY = pushX * tangentScale;
+          // Apply opposite tangential kicks to create counter-rotation
+          seg.prevX[i] += tanX;
+          seg.prevY[i] += tanY;
+          seg.prevX[j] -= tanX;
+          seg.prevY[j] -= tanY;
         }
       }
     }

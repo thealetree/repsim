@@ -22,7 +22,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   virusTransmission: 0.5, // Base transmission multiplier
   virusImmunityTime: 50,  // Seconds to develop immunity
   greenFeed: 100,         // HP per photosynthesis tick — balanced against root drain of 70
-  blueHP: 1000,           // Extra HP per blue segment — doubles base segment health
+  blueHP: 600,            // Extra HP per blue segment length unit (was 1000 — too dominant)
   yellowFreq: 1.25,       // Seconds between movement — not too twitchy, not too sluggish
   redDamage: 400,         // Damage per attack — kills a normal segment in ~2.5 hits
   purpleCost: 1000,       // Sexual repro cost per parent — total 2000 vs scaled asexual (was 2500)
@@ -66,8 +66,8 @@ export function getReproThreshold(segCount: number): number {
 }
 
 // ─── Sexual Reproduction Bonuses ────────────────────────────
-export const SEXUAL_VIGOR_BONUS = 4.0;             // 4x starting HP for sexually-produced offspring (was 1.25)
-export const SEXUAL_LIFESPAN_BONUS = 1.5;          // 1.5x lifespan for sexually-produced offspring
+export const SEXUAL_VIGOR_BONUS = 2.0;             // 2x starting HP for sexually-produced offspring (was 4.0 — too strong)
+export const SEXUAL_LIFESPAN_BONUS = 1.25;         // 1.25x lifespan for sexually-produced offspring (was 1.5)
 export const SEXUAL_IMMUNITY_INHERIT_RATE = 0.75;  // 75% immunity inheritance (vs 50% asexual)
 
 export const ROOT_DRAIN_INTERVAL_TICKS = 22;    // ~1.1 seconds at 20 ticks/sec (V1: every 1.1s)

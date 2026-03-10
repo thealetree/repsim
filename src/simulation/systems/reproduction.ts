@@ -211,13 +211,16 @@ function reproduceSexually(
   parent2: Organism,
   config: SimConfig,
 ): void {
-  const cost = config.purpleCost;
+  // Sexual repro cost scales with organism size — prevents large organisms
+  // from reproducing cheaply. Base purpleCost + 200 per segment.
+  const cost1 = config.purpleCost + 200 * parent1.segmentCount;
+  const cost2 = config.purpleCost + 200 * parent2.segmentCount;
 
   // HP cost check for both parents
-  if (parent1.rootHealthReserve < cost || parent2.rootHealthReserve < cost) return;
+  if (parent1.rootHealthReserve < cost1 || parent2.rootHealthReserve < cost2) return;
 
-  parent1.rootHealthReserve -= cost;
-  parent2.rootHealthReserve -= cost;
+  parent1.rootHealthReserve -= cost1;
+  parent2.rootHealthReserve -= cost2;
   parent1.reproMeter = 0;
   parent2.reproMeter = 0;
 
