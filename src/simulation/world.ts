@@ -472,6 +472,7 @@ export function spawnOrganismFromGenome(
   // Check if this organism has any black/white segments (quick flags)
   const hasBlack = genome.some(g => g.color === SegmentColor.Black);
   const hasWhite = genome.some(g => g.color === SegmentColor.White);
+  const hasYellow = genome.some(g => g.color === SegmentColor.Yellow);
 
   // Build tree topology (cached for constraints/rendering)
   const topology = buildGenomeTopology(genome);
@@ -505,6 +506,7 @@ export function spawnOrganismFromGenome(
     timedDeathAt: world.tick + randomInt(TIMED_DEATH_MIN_TICKS, TIMED_DEATH_MAX_TICKS),
     hasBlack,
     hasWhite,
+    hasYellow,
     immuneTo: new Set(),
     virusInfectionCount: 0,
     parentId,

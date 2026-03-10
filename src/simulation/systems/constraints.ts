@@ -42,6 +42,7 @@ import {
   MAX_SEGMENTS,
   VIRUS_JOINT_WOBBLE,
   PARALLAX_BOUNDARY_MARGIN,
+  BROWNIAN_ROTATION_STRENGTH,
 } from '../../constants';
 import {
   createSpatialHash,
@@ -54,11 +55,9 @@ import { _orgDepthLayer } from './behaviors';
 
 const spatialHash = createSpatialHash();
 
-// Module-level scratch buffers for angular constraints.
+// Module-level scratch buffer for angular constraints.
 // Reused every frame to avoid garbage collection. MAX_SEGMENTS = 15.
 const _incomingAngle = new Float64Array(MAX_SEGMENTS);
-const _restX = new Float64Array(MAX_SEGMENTS);
-const _restY = new Float64Array(MAX_SEGMENTS);
 
 
 // ─── Fast Numeric Tank Cell Lookup ──────────────────────────
@@ -237,13 +236,21 @@ export function enforceChainConstraints(world: World): void {
 /**
  * Angular Constraints — Make organisms hold their genetic shape
  *
- * TREE-AWARE: Computes the "rest shape" by walking the tree in topological
- * order (index order), building rest positions from the genome's parent
- * references and turn angles. Each segment is blended toward its rest position.
+ * ROTATION-BASED APPROACH: Instead of computing ideal "rest positions" and
+ * linearly blending toward them (which injects distance errors that fight
+ * chain constraints), we ROTATE each segment around its parent by a fraction
+ * of the angle error. This preserves current chain distances by construction,
+ * eliminating the oscillation/spinning that tight angles caused.
+ *
+ * TREE-AWARE: Processes segments in topological order (index order).
+ * Uses ACTUAL parent incoming angles (from current positions), not ideal ones.
+ * This means each iteration builds on real geometry rather than fighting it.
  *
  * The organism's current orientation comes from the root→first-child direction.
- * This means organisms can freely rotate as a whole, but internal angles
- * are rigidly maintained — including branch angles.
+ * Organisms can freely rotate as a whole, but internal angles are maintained.
+ *
+ * CONVERGENCE: With stiffness 0.7 per iteration × 3 iterations, residual
+ * error = (1 - 0.7)³ = 2.7%. No overcorrection, no oscillation.
  *
  * CRITICAL: Both pos and prevPos are adjusted by the same delta.
  * This prevents the angular constraint from injecting rotational velocity.
@@ -278,34 +285,52 @@ export function enforceAngularConstraints(world: World): void {
     //   effectiveBase = baseAngle - genome[firstChildGeneIdx].angle
     const effectiveBase = baseAngle - org.genome[firstChildGeneIdx].angle;
 
-    // Compute rest positions in topological order using scratch buffers
+    // Compute ACTUAL incoming angles at each segment from current positions.
+    // Root uses effectiveBase; all others use atan2(seg - parent).
     _incomingAngle[0] = effectiveBase;
-    _restX[0] = seg.x[root];
-    _restY[0] = seg.y[root];
-
     for (let i = 1; i < org.segmentCount; i++) {
-      const geneParent = org.genome[i].parent;
-      const outAngle = _incomingAngle[geneParent] + org.genome[i].angle;
-      _incomingAngle[i] = outAngle;
-
-      const parentLen = org.genome[geneParent].length || 1;
-      const childLen = org.genome[i].length || 1;
-      const chainDist = SEGMENT_CHAIN_DISTANCE * Math.sqrt((parentLen + childLen) / 2);
-      _restX[i] = _restX[geneParent] + Math.cos(outAngle) * chainDist;
-      _restY[i] = _restY[geneParent] + Math.sin(outAngle) * chainDist;
+      const parentGlobal = root + org.genome[i].parent;
+      const idx = root + i;
+      _incomingAngle[i] = Math.atan2(
+        seg.y[idx] - seg.y[parentGlobal],
+        seg.x[idx] - seg.x[parentGlobal],
+      );
     }
 
-    // Apply corrections for all segments except root and the reference child
-    // (the first child of root defines the reference direction — constraining it
-    // would fight the reference computation)
+    // Rotate each non-reference segment toward its desired angle.
+    // Desired angle = parent's actual incoming angle + gene's turn angle.
+    // Rotation around parent preserves the current chain distance.
     for (let i = 1; i < org.segmentCount; i++) {
       if (i === firstChildGeneIdx) continue; // reference child — skip
 
       const idx = root + i;
       if (!seg.alive[idx]) continue;
 
-      const corrX = (_restX[i] - seg.x[idx]) * stiffness;
-      const corrY = (_restY[i] - seg.y[idx]) * stiffness;
+      const parentGeneIdx = org.genome[i].parent;
+      const parentGlobal = root + parentGeneIdx;
+
+      // Desired angle: parent's incoming direction + this gene's turn angle
+      const desiredAngle = _incomingAngle[parentGeneIdx] + org.genome[i].angle;
+      const currentAngle = _incomingAngle[i];
+
+      // Angle error normalized to [-π, π]
+      let angleError = desiredAngle - currentAngle;
+      if (angleError > Math.PI) angleError -= Math.PI * 2;
+      else if (angleError < -Math.PI) angleError += Math.PI * 2;
+
+      const delta = angleError * stiffness;
+
+      // Rotate the (dx, dy) vector around parent by delta.
+      // This preserves the current distance — no chain constraint fighting!
+      const dx = seg.x[idx] - seg.x[parentGlobal];
+      const dy = seg.y[idx] - seg.y[parentGlobal];
+      const cosD = Math.cos(delta);
+      const sinD = Math.sin(delta);
+      const newDx = dx * cosD - dy * sinD;
+      const newDy = dx * sinD + dy * cosD;
+
+      const corrX = (seg.x[parentGlobal] + newDx) - seg.x[idx];
+      const corrY = (seg.y[parentGlobal] + newDy) - seg.y[idx];
 
       // Apply to BOTH pos and prevPos — no velocity injection!
       seg.x[idx] += corrX;
@@ -606,12 +631,67 @@ function applyCurrentForces(world: World): void {
 }
 
 
+/**
+ * Brownian Rotation — Prevents systematic wall-alignment bias
+ *
+ * Organisms without yellow segments have no source of rotation. Wall collisions
+ * systematically rotate elongated bodies to align parallel to nearby walls,
+ * creating an unnatural horizontal alignment in wider tank regions.
+ *
+ * This simulates thermal Brownian rotation: a tiny random angular displacement
+ * each tick. All segments rotate equally around the root, preserving internal
+ * angles and chain distances. Both pos and prevPos move, so no velocity is
+ * injected — it's a pure orientation change.
+ *
+ * Random walk: after ~1 minute RMS drift ≈ 16°, after ~5 minutes ≈ 35°.
+ */
+function applyBrownianRotation(world: World): void {
+  const seg = world.segments;
+  const strength = BROWNIAN_ROTATION_STRENGTH;
+
+  for (const org of world.organisms.values()) {
+    if (!org.alive || org.segmentCount < 2) continue;
+    if (org.hasYellow) continue; // Yellow organisms rotate from thrust
+
+    const root = org.firstSegment;
+    if (!seg.alive[root]) continue;
+
+    // Tiny random spin — rotate ALL segments around root
+    const spin = (Math.random() - 0.5) * 2 * strength;
+    const cosS = Math.cos(spin);
+    const sinS = Math.sin(spin);
+    const rx = seg.x[root];
+    const ry = seg.y[root];
+
+    for (let i = 1; i < org.segmentCount; i++) {
+      const idx = root + i;
+      if (!seg.alive[idx]) continue;
+
+      const dx = seg.x[idx] - rx;
+      const dy = seg.y[idx] - ry;
+      const newDx = dx * cosS - dy * sinS;
+      const newDy = dx * sinS + dy * cosS;
+
+      const corrX = (rx + newDx) - seg.x[idx];
+      const corrY = (ry + newDy) - seg.y[idx];
+
+      // Move BOTH pos and prevPos — pure orientation change, no velocity injection
+      seg.x[idx] += corrX;
+      seg.y[idx] += corrY;
+      seg.prevX[idx] += corrX;
+      seg.prevY[idx] += corrY;
+    }
+  }
+}
+
+
 export function runConstraints(world: World, config: SimConfig): void {
   // Sync fast numeric tank cell lookup (only rebuilds when dirty)
   syncFastTankCells(world);
 
   integrateVerlet(world, config);
   applyCurrentForces(world);  // Inject current forces after verlet
+  applyBrownianRotation(world);  // Prevent wall-alignment bias for non-yellow organisms
 
   for (let iter = 0; iter < CHAIN_CONSTRAINT_ITERATIONS; iter++) {
     enforceChainConstraints(world);

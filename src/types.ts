@@ -216,6 +216,10 @@ export interface Organism {
   // Used for organism-wide food scavenging (any segment eats food if org has white)
   hasWhite: boolean;
 
+  // Quick flag: does this organism have at least one yellow segment?
+  // Used to skip Brownian rotation (yellow organisms rotate from thrust)
+  hasYellow: boolean;
+
   // Set of strain IDs this organism is immune to (survives infection → gains immunity)
   immuneTo: Set<number>;
 
