@@ -12,6 +12,7 @@ import type { SimulationEngine } from '../simulation/engine';
 import type { Renderer } from '../rendering/renderer';
 import type { EventBus } from '../events';
 import type { World, CurrentSource, LightSource, TemperatureSource } from '../types';
+import type { TooltipSystem } from './tooltips';
 import { CurrentType } from '../types';
 import {
   LIGHT_MIN_RADIUS, LIGHT_MAX_RADIUS,
@@ -278,6 +279,7 @@ export function createEnvironmentPanel(
   engine: SimulationEngine,
   renderer: Renderer,
   events: EventBus,
+  tooltips?: TooltipSystem,
 ): void {
   // ── Build toggle button ──
   const toggle = document.createElement('div');
@@ -322,8 +324,8 @@ export function createEnvironmentPanel(
           </div>
           <div class="env-slider-row">
             <span class="env-slider-label">Speed</span>
-            <input type="range" id="env-daynight-speed" min="0.1" max="3" step="0.1" value="${engine.world.dayNightSpeed}">
-            <span class="env-slider-val" id="env-daynight-speed-val">${engine.world.dayNightSpeed.toFixed(1)}</span>
+            <input type="range" id="env-daynight-speed" min="0.1" max="0.7" step="0.01" value="${engine.world.dayNightSpeed}">
+            <span class="env-slider-val" id="env-daynight-speed-val">${engine.world.dayNightSpeed.toFixed(2)}</span>
           </div>
           <div class="env-phase-bar">
             <div class="env-phase-fill" id="env-daynight-phase" style="width:50%"></div>
@@ -373,6 +375,20 @@ export function createEnvironmentPanel(
   // Also sync immediately on resize
   window.addEventListener('resize', syncPanelEdges);
 
+  // ── Attach tooltips to environment controls ──
+  if (tooltips) {
+    const envSliderRows = panel.querySelectorAll('.env-slider-row');
+    envSliderRows.forEach((row) => {
+      const input = row.querySelector<HTMLInputElement>('input[type="range"]');
+      if (input?.id === 'env-light') tooltips.attach(row as HTMLElement, 'env-light');
+      else if (input?.id === 'env-viscosity') tooltips.attach(row as HTMLElement, 'env-viscosity');
+      else if (input?.id === 'env-food-decay') tooltips.attach(row as HTMLElement, 'env-food-decay');
+      else if (input?.id === 'env-daynight-speed') tooltips.attach(row as HTMLElement, 'env-daynight-speed');
+    });
+    const daynightToggleRow = panel.querySelector('.env-toggle-row');
+    if (daynightToggleRow) tooltips.attach(daynightToggleRow as HTMLElement, 'env-daynight-toggle');
+  }
+
   // ── Wire Light (photosynthesis) slider ──
   const lightSlider = document.getElementById('env-light') as HTMLInputElement;
   const lightVal = document.getElementById('env-light-val')!;
@@ -413,7 +429,7 @@ export function createEnvironmentPanel(
   dnSpeedSlider.addEventListener('input', () => {
     const v = parseFloat(dnSpeedSlider.value);
     engine.world.dayNightSpeed = v;
-    dnSpeedVal.textContent = v.toFixed(1);
+    dnSpeedVal.textContent = v.toFixed(2);
   });
 
   // ── Refresh sliders when config/world changes (save slot load, etc.) ──
@@ -431,7 +447,7 @@ export function createEnvironmentPanel(
     // Day/night controls
     dnToggle.checked = engine.world.dayNightEnabled;
     dnSpeedSlider.value = String(engine.world.dayNightSpeed);
-    dnSpeedVal.textContent = engine.world.dayNightSpeed.toFixed(1);
+    dnSpeedVal.textContent = engine.world.dayNightSpeed.toFixed(2);
   });
 
   // ── Update phase indicator bar + day/night grayout ──
@@ -507,7 +523,7 @@ export function createEnvironmentPanel(
       html += `
         <div class="env-slider-row">
           <span class="env-slider-label">Intensity</span>
-          <input type="range" id="src-intensity" min="0" max="100" step="1" value="${Math.round(ls.intensity * 100)}">
+          <input type="range" id="src-intensity" min="0" max="200" step="1" value="${Math.round(ls.intensity * 100)}">
           <span class="env-slider-val" id="src-intensity-val">${Math.round(ls.intensity * 100)}</span>
         </div>
       `;
@@ -516,7 +532,7 @@ export function createEnvironmentPanel(
       html += `
         <div class="env-slider-row">
           <span class="env-slider-label">Intensity</span>
-          <input type="range" id="src-intensity" min="-1" max="1" step="0.05" value="${ts.intensity}">
+          <input type="range" id="src-intensity" min="-2" max="2" step="0.05" value="${ts.intensity}">
           <span class="env-slider-val" id="src-intensity-val">${ts.intensity.toFixed(2)}</span>
         </div>
       `;
@@ -525,7 +541,7 @@ export function createEnvironmentPanel(
       html += `
         <div class="env-slider-row">
           <span class="env-slider-label">Strength</span>
-          <input type="range" id="src-strength" min="0" max="1" step="0.05" value="${cs.strength}">
+          <input type="range" id="src-strength" min="0" max="2" step="0.05" value="${cs.strength}">
           <span class="env-slider-val" id="src-strength-val">${cs.strength.toFixed(2)}</span>
         </div>
         <div class="env-slider-row">

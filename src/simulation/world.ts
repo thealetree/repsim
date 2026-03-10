@@ -41,6 +41,8 @@ import {
   ORGANISM_KILL_ENERGY_FRACTION,
   ORGANISM_KILL_FOOD_REDUCTION,
   ORGANISM_KILL_MIN_ENERGY,
+  REPRO_FILL_FRACTION,
+  REPRO_METER_MAX,
   PREFERRED_ANGLE_CHANCE,
   PREFERRED_ANGLE_JITTER,
   COLOR_PREFERRED_ANGLES,
@@ -178,15 +180,19 @@ export function getRandomTankPosition(world: World): { x: number; y: number } {
   };
 }
 
-/** Initialize tankCells as a filled rectangle matching default tank dimensions */
+/** Initialize tankCells as a plus/cross shape — the default Repsim tank */
 export function initDefaultTankCells(world: World): void {
   world.tankCells.clear();
   const halfCols = Math.floor(TANK_HALF_WIDTH / TANK_GRID_SPACING);
   const halfRows = Math.floor(TANK_HALF_HEIGHT / TANK_GRID_SPACING);
+  const armHalf = 5;  // Half-width of cross arms in cells (9 cells = 720 world units)
 
   for (let col = -halfCols; col < halfCols; col++) {
     for (let row = -halfRows; row < halfRows; row++) {
-      world.tankCells.add(cellKey(col, row));
+      // Plus shape: include if in horizontal arm OR vertical arm
+      if (Math.abs(row) < armHalf || Math.abs(col) < armHalf) {
+        world.tankCells.add(cellKey(col, row));
+      }
     }
   }
   world.tankCellsDirty = true;
@@ -705,6 +711,8 @@ export function removeOrganism(world: World, id: number): void {
       );
       killer.rootHealthReserve += transferAmount;
       killer.rootHealthReserve = Math.min(killer.rootHealthReserve, killer.rootHealthReserveMax);
+      // Active energy fills repro meter
+      killer.reproMeter = Math.min(REPRO_METER_MAX, killer.reproMeter + transferAmount * REPRO_FILL_FRACTION);
     }
   }
 

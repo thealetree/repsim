@@ -76,10 +76,28 @@ function createEmptySlots(): SaveSlot[] {
   return Array.from({ length: SLOT_COUNT }, () => ({ name: null, data: null }));
 }
 
-// Default "Cross" preset — compressed base64url of a TankPayload
-const CROSS_PRESET_COMPRESSED = 'eF6NmU2THDUMhf_LnNuU5e62u_cKRXHgwD2Vw0KWMMVmA8mGj0rlvzMzep7eG3Cyp6RXUtuvZGn38-mP011Mp-f7p19Pd69elVin0l5PuQk2lTV_L2osaixoLGjMasxqzGjMaDQ1mhoNjYZGqBFqBBqBRlWjqlHRqKmxo7Aj31O8p3RDuiHdUrqldCAdSEdKR0o70o60p7Sn1CP0BDlAzs_j8_Q4PM7uemLHprLZWTfWwdpZV9aFdWZtGsoVc_xCiC5QLGEYP7glioyqGWczzkacjTgbcTbibMTZiLMRp1SQCRABHrQJIbpAsYRh_OCWKDKqMM4wziDOIM4gziDOIM4gziDOg5CyDbLBxgkhukCxhGH84JYoblHBZZicPE4W4xav6TR9cnCcWx5bnhpXz83nxee9Qz64l9RL5kFaOJuUTcZCdrieVE-mkyTkSKZIZgjJRW5lamVmkZTkZKZkZqQJbT6TzmSzBcF6QDmgGlhQrCeUE6qJBcl6RDmiGlnQrGeUM6rZnjTZkyV7kmRPjuxJkT0Zsk_5YblPQWolZPBtG6u_O-vKurDOuXIk_EKILtCbJfgc8Dngc8DngM8BnyMZG8nYSMZGMjaSsZGMDTI6yOggo4OMDjI6yOjInI3M2cicjczZyJyNzNmgpgU1LahpQU0LalpQ0yKrVmTViqxakVUrsmpFVq3rXW6s_u6sK-vCOucKBfiFEF2gN0srllcsr1hesbxiecUyieV7ynPKa3pZEKILFEsYvvnp-O347fjt-O347fglbYO8jUzcyMy9LAjRBYolDN_8DPwO_A78DvwO_A78UhSCqhBZFiLrwmVBiC5QLGH4VievFeLYdDerm8XN7OZWgDdRm6hN1CZqE7WJGqKGqCFqiBqihqguqovqorqoLqqLWkWtolZRq6hV1CpqEbWIWkQtohZRi6hZ1CxqFjWLmkXNopqoJqqJaqKaqCYqRIWoEBWiQlSAqoAqmAqkgqgAKvo60Ycu9KAD7fspfokf4nf4GX6FB-Z5eVyeloflWXkt3oqX4p14Jd6Il-_de_XevBfvvUsxGSbB5Jf0OtgVu23Nbl-z29jsdja7rc1ub2OrHPbKQbMcdMuxTyqI0IQ2dZJeN-PYjGMzjs04NuPYjMOmPOzKg7Y86MsvqwoiNKFNnaTXYRzDOIZxDOMYxjGMw_bfKlYoY4U6VihkhUpWKGWFWlYoZsVqZvku1u9iAS9W8GIJL9bwYhEvVvFCGS_U8UIhL1TyQikv1PJCMS9U8-LzVXy_ig9Y8QUrPmHFN6zwTBXeqcJDVXipCk9V4a0qPr_F97f4ABdf4OITXHyDC49w4RUuPMOFd7jwEBde4tKOUeOYNY5h45g2jnHjmDeOgeOYOBw5nDkcOpw6HDucOxw8nDwcJZqzRHOYaE4TzXGiOU80B4rmRNEYKRozRWOoaEwVjbGiMVc0BovGZNGqcVTjqMZRjaMaRzUO5-jmHN2YoxtzdKuTCiI0oU2d5F1f4g83zc3sZnGzuuluDvjmJoekqsGqwarBqsGqwarBqsGqwYrBHXs75vbJNsK-wkbDzsNWJA3t2Nmws012HzYWdhq2HvYiNidpZ8POwM6Y7EdsNew9bEbsTmxX0s7ATsdOn-xQbD7sRmxP7FdsYNJOx86KnXWyZ7EdsT-xYbGDsaVJOyt2Fuwsk12MDYodiy2MPY1NTtpZsDNP_lHEvsaWxR7GpsYux7Yn-ONF-FeBYG2sM-vCurJ21sHKHxfCqT1YG-vMurCurJ11sDL83-xAa0gNpSE0dIbMUBkiQ2OiIAhiIAQiIAD84x7vHAZnwVFwEhwE58AxcAocAnfClXAjXAj3wXVwG1wGdwE1YAbEgBfQAlZACjgBJWAoBIWf0BN2Qk64CTVhJolCnpAmZAlJQo6QImSICXLt58JNZaME6haoXKB2geoF6hdSgczgF0J0gWIJw6ZWNgIvffdL4_3Seb-03i-9t81x_uV0HLt-7NZjtxy7-dhZ0i8F_7C3HzsrrdJ6SKvSXeGubFe0KdoUbYqGoqFoKOqKuqKuaFW0KloVLYoWRYuiWdGsaFbUFDVF7fjq46OPb0bkcXgYHoUIAerrRB-6MC7DMio_xS_xQ_x6P95v98A8rzyu19Pp8fz2l-ePp7tXn0_nN7d_Dfx1urvQoC_T6e_Lblmn04f7N-dPF52t1ul0fnp-ePp4fr4I48uUqAZq1Bso2jr-B2q-oaKNfkNdupr_xizGt2V4Mdfl32CXL_zp_dPP57enu8-nDw-_ff3-09PzRVCvmpff35_fnY_fPz5-evjuh8uv9frr74fHx_d_fvvh4ffTXf2qXc_h4c039-_u3z6c7sZav3z5B_cA4pc';
+/** Generate a TankPayload for the default plus/cross tank at runtime.
+ *  Uses the same cell math as initDefaultTankCells() in world.ts. */
+function generateDefaultTankPayload(): TankPayload {
+  const HALF_WIDTH = 1200;   // TANK_HALF_WIDTH
+  const HALF_HEIGHT = 800;   // TANK_HALF_HEIGHT
+  const SPACING = 80;        // TANK_GRID_SPACING
+  const halfCols = Math.floor(HALF_WIDTH / SPACING);
+  const halfRows = Math.floor(HALF_HEIGHT / SPACING);
+  const armHalf = 5;
 
-async function loadSaveSlots(): Promise<SaveSlot[]> {
+  const tank: [number, number][] = [];
+  for (let col = -halfCols; col < halfCols; col++) {
+    for (let row = -halfRows; row < halfRows; row++) {
+      if (Math.abs(row) < armHalf || Math.abs(col) < armHalf) {
+        tank.push([col, row]);
+      }
+    }
+  }
+  return { v: 1, tank };
+}
+
+function loadSaveSlots(): SaveSlot[] {
   const raw = localStorage.getItem(SAVE_SLOTS_KEY);
   if (raw) {
     try {
@@ -87,14 +105,10 @@ async function loadSaveSlots(): Promise<SaveSlot[]> {
       if (Array.isArray(parsed) && parsed.length === SLOT_COUNT) return parsed;
     } catch { /* corrupted, re-initialize */ }
   }
-  // First visit: decompress Cross preset for slot 1
+  // First visit: generate Cross preset from default plus tank
   const slots = createEmptySlots();
-  try {
-    const json = await decompress(CROSS_PRESET_COMPRESSED);
-    slots[0] = { name: 'Cross', data: json };
-  } catch {
-    console.warn('Failed to decompress Cross preset');
-  }
+  const payload = generateDefaultTankPayload();
+  slots[0] = { name: 'Cross', data: JSON.stringify(payload) };
   persistSlots(slots);
   return slots;
 }
@@ -196,7 +210,7 @@ function serializeTank(
     if (w.dayNightEnabled || w.dayNightSpeed !== 0.5) {
       payload.dayNight = {
         enabled: w.dayNightEnabled,
-        speed: Math.round(w.dayNightSpeed * 10) / 10,
+        speed: Math.round(w.dayNightSpeed * 100) / 100,
         phase: Math.round(w.dayNightPhase * 1000) / 1000,
       };
     }
@@ -334,7 +348,7 @@ function applyTankPayload(engine: SimulationEngine, payload: TankPayload): void 
   // Apply day/night settings
   if (payload.dayNight) {
     world.dayNightEnabled = payload.dayNight.enabled;
-    world.dayNightSpeed = payload.dayNight.speed;
+    world.dayNightSpeed = Math.max(0.1, Math.min(0.7, payload.dayNight.speed));
     world.dayNightPhase = payload.dayNight.phase;
   }
 
@@ -411,11 +425,11 @@ export function buildSaveShareSection(
   header.setAttribute('data-toggle', 'save-share');
   header.innerHTML = `
     <span class="section-title">SAVE & SHARE</span>
-    <span class="section-chevron collapsed">▼</span>
+    <span class="section-chevron">▼</span>
   `;
 
   const body = document.createElement('div');
-  body.className = 'section-body collapsed';
+  body.className = 'section-body';
   body.setAttribute('data-body', 'save-share');
 
   // Toggle checkboxes
@@ -627,17 +641,11 @@ export function buildSaveShareSection(
     });
   }
 
-  // Async initialization — load slots from localStorage (or decompress Cross preset)
-  loadSaveSlots().then(loaded => {
-    slots = loaded;
-    renderSlots();
-  });
+  // Initialize slots from localStorage (or generate Cross preset for first visit)
+  slots = loadSaveSlots();
+  renderSlots();
 
-  // Accordion toggle
-  header.addEventListener('click', () => {
-    const isCollapsed = body.classList.toggle('collapsed');
-    header.querySelector('.section-chevron')!.classList.toggle('collapsed', isCollapsed);
-  });
+  // NOTE: Accordion toggle is handled by ui.ts wireAccordion() for persistence
 
   // Copy URL handler — copyDeferred is called synchronously in the click
   // so the ClipboardItem registers before user activation expires.

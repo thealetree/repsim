@@ -422,13 +422,28 @@ export function createChartSystem(
     toggle.textContent = collapsed ? '\u25B6' : '\u25C0'; // ▶ = expand right, ◀ = collapse left
   });
 
+  // ── Accordion persistence (shared key with right panel) ──
+  const ACCORDION_KEY = 'repsim-accordion';
+  function loadAccordionState(): Record<string, boolean> {
+    try {
+      const raw = localStorage.getItem(ACCORDION_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch { /* corrupted */ }
+    return {};
+  }
+  function saveAccordionState(state: Record<string, boolean>): void {
+    try { localStorage.setItem(ACCORDION_KEY, JSON.stringify(state)); } catch { /* quota */ }
+  }
+  const accordionState = loadAccordionState();
+
   // Chart sections
   const canvases: HTMLCanvasElement[] = [];
 
   for (const chart of charts) {
+    const sectionId = `chart-${chart.id}`;
     const section = document.createElement('div');
     section.className = 'panel-section';
-    section.dataset.section = `chart-${chart.id}`;
+    section.dataset.section = sectionId;
 
     const header = document.createElement('div');
     header.className = 'section-header';
@@ -440,6 +455,12 @@ export function createChartSystem(
     const body = document.createElement('div');
     body.className = 'section-body';
 
+    // Apply stored accordion state (default: expanded)
+    if (sectionId in accordionState && !accordionState[sectionId]) {
+      body.classList.add('collapsed');
+      header.querySelector('.section-chevron')!.classList.add('collapsed');
+    }
+
     const canvas = document.createElement('canvas');
     canvas.width = CHART_PANEL_WIDTH - 16; // account for padding
     canvas.height = CHART_HEIGHT;
@@ -447,12 +468,12 @@ export function createChartSystem(
     body.appendChild(canvas);
     canvases.push(canvas);
 
-    // Accordion toggle
-    let sectionOpen = true;
+    // Accordion toggle with persistence
     header.addEventListener('click', () => {
-      sectionOpen = !sectionOpen;
-      body.classList.toggle('collapsed', !sectionOpen);
-      header.querySelector('.section-chevron')!.classList.toggle('collapsed', !sectionOpen);
+      const isCollapsed = body.classList.toggle('collapsed');
+      header.querySelector('.section-chevron')!.classList.toggle('collapsed', isCollapsed);
+      accordionState[sectionId] = !isCollapsed;
+      saveAccordionState(accordionState);
     });
 
     section.appendChild(header);

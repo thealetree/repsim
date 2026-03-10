@@ -788,7 +788,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.5.8</div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.6.0</div>
   `;
 
   // Virus section
@@ -833,7 +833,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
     buildSection('Selected Organism', 'organism', orgContent) +
     buildSection('Virus', 'virus', virusContent) +
     buildSection('Simulation', 'sim', slidersContent) +
-    buildSection('Controls', 'controls', controlsContent, false);
+    buildSection('Controls', 'controls', controlsContent);
 
   return panel;
 }
@@ -1052,15 +1052,41 @@ export function createUI(
   };
   waitForBottomPanel();
 
-  // ── Accordion sections ──
-  rightPanel.querySelectorAll<HTMLElement>('.section-header').forEach((header) => {
+  // ── Accordion sections (with localStorage persistence) ──
+  const ACCORDION_KEY = 'repsim-accordion';
+  function loadAccordionState(): Record<string, boolean> {
+    try {
+      const raw = localStorage.getItem(ACCORDION_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch { /* corrupted */ }
+    return {};
+  }
+  function saveAccordionState(state: Record<string, boolean>): void {
+    try { localStorage.setItem(ACCORDION_KEY, JSON.stringify(state)); } catch { /* quota */ }
+  }
+  const accordionState = loadAccordionState();
+
+  /** Wire up an accordion section: apply stored state, add click toggle with persistence */
+  function wireAccordion(header: HTMLElement, body: Element, sectionId: string): void {
+    const chevron = header.querySelector('.section-chevron')!;
+    // Apply stored state (if exists), otherwise keep HTML default (expanded)
+    if (sectionId in accordionState) {
+      const shouldCollapse = !accordionState[sectionId]; // true = open, false = collapsed
+      body.classList.toggle('collapsed', shouldCollapse);
+      chevron.classList.toggle('collapsed', shouldCollapse);
+    }
     header.addEventListener('click', () => {
-      const sectionId = header.dataset.toggle!;
-      const body = rightPanel.querySelector(`[data-body="${sectionId}"]`)!;
-      const chevron = header.querySelector('.section-chevron')!;
-      body.classList.toggle('collapsed');
-      chevron.classList.toggle('collapsed');
+      const isCollapsed = body.classList.toggle('collapsed');
+      chevron.classList.toggle('collapsed', isCollapsed);
+      accordionState[sectionId] = !isCollapsed;
+      saveAccordionState(accordionState);
     });
+  }
+
+  rightPanel.querySelectorAll<HTMLElement>('.section-header').forEach((header) => {
+    const sectionId = header.dataset.toggle!;
+    const body = rightPanel.querySelector(`[data-body="${sectionId}"]`)!;
+    wireAccordion(header, body, sectionId);
   });
 
   // ── Save & Share section (inserted after organism section) ──
@@ -1071,6 +1097,10 @@ export function createUI(
   } else {
     rightPanel.appendChild(saveShareSection);
   }
+  // Wire save-share accordion with persistence
+  const ssHeader = saveShareSection.querySelector<HTMLElement>('.section-header');
+  const ssBody = saveShareSection.querySelector('[data-body="save-share"]');
+  if (ssHeader && ssBody) wireAccordion(ssHeader, ssBody, 'save-share');
 
   // ── Focus slider (in top bar) ──
   const focusSlider = document.getElementById('focus-slider') as HTMLInputElement;

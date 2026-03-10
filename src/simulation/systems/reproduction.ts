@@ -8,9 +8,9 @@
  * TWO MODES OF REPRODUCTION:
  *
  * 1. ASEXUAL (no black segments):
- *    When an organism is healthy enough (rootHP > 4990) and its repro meter
- *    fills up (3001), it copies its genome with small mutations and spawns
- *    a child nearby. Costs 3000 HP from the parent.
+ *    When an organism's repro meter fills up (3001) from active energy gains
+ *    (photosynthesis, food, predation), it copies its genome with small
+ *    mutations and spawns a child nearby. Costs 3000 HP from the parent.
  *
  * 2. SEXUAL (has black segments):
  *    Requires a nearby mate (within 150 world units, same depth layer) who
@@ -35,9 +35,6 @@ import type { World, Organism, Genome, Gene, SimConfig } from '../../types';
 import { SegmentColor, VirusEffect } from '../../types';
 import {
   REPRO_METER_MAX,
-  REPRO_METER_FILL,
-  REPRO_METER_FILL_INTERVAL,
-  getReproThreshold,
   getReproCost,
   SEXUAL_REPRO_RANGE,
   STRUCTURAL_MUTATION_CHANCE,
@@ -77,26 +74,16 @@ const SEXUAL_REPRO_RANGE_SQ = SEXUAL_REPRO_RANGE * SEXUAL_REPRO_RANGE;
  * get attacked on their birth tick).
  *
  * Flow:
- * 1. Fill repro meters for healthy organisms (every REPRO_METER_FILL_INTERVAL ticks)
+ * 1. Repro meters are filled by ACTIVE energy systems in behaviors.ts
+ *    (photosynthesis, food eating, predation — not passive reserve levels)
  * 2. Collect organisms ready to reproduce (meter >= REPRO_METER_MAX)
  * 3. Process asexual births (no black segments)
  * 4. Process sexual births (find mate pairs with black segments)
  * 5. Respect population cap — stop birthing when full
  */
 export function runReproduction(world: World, config: SimConfig): void {
-  // Only run meter filling on the interval tick
-  if (world.tick % REPRO_METER_FILL_INTERVAL !== 0) return;
-
-  // ── Fill repro meters ──
-  // Organisms must be very healthy (rootHP > 4990) to invest in reproduction.
-  // This ensures only well-fed organisms reproduce — natural selection in action.
-  for (const org of world.organisms.values()) {
-    if (!org.alive) continue;
-
-    if (org.rootHealthReserve > getReproThreshold(org.genome.length) && org.reproMeter < REPRO_METER_MAX) {
-      org.reproMeter += REPRO_METER_FILL;
-    }
-  }
+  // Check for births periodically (meter filling happens in behavior systems)
+  if (world.tick % 10 !== 0) return;  // Every 0.5s
 
   // ── Population cap check ──
   // If we're at the limit, don't even bother checking for births.

@@ -73,6 +73,13 @@ const TOOLTIP_TEXTS: Record<string, string> = {
   'chart-diversity': 'Number of unique species (genome fingerprints) over time',
   'chart-virus': 'Infected organisms (green) and active virus strains (yellow) over time',
 
+  // Tank Settings (Environment panel)
+  'env-light': 'Base photosynthesis energy — how much food green segments produce per tick',
+  'env-viscosity': 'Global fluid thickness — higher values slow all movement',
+  'env-food-decay': 'How long dead-segment food particles persist before dissolving',
+  'env-daynight-toggle': 'Enable a day/night cycle that dims light sources over time',
+  'env-daynight-speed': 'How fast the day/night cycle progresses',
+
   // Tooltips toggle itself
   'tooltips-toggle': 'Show or hide hover tooltips on UI elements',
 };

@@ -74,7 +74,7 @@ async function main(): Promise<void> {
 
   // ── 8b. Bottom Environment Panel ──
   injectEnvironmentPanelStyles();
-  createEnvironmentPanel(engine, renderer, events);
+  createEnvironmentPanel(engine, renderer, events, tooltips);
 
   // ── 8c. Mobile Layout ──
   setupMobileLayout(engine, renderer, events);

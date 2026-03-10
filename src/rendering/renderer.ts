@@ -806,7 +806,12 @@ export async function createRenderer(width: number, height: number): Promise<Ren
       // Dark overlay only in dark mode when lights exist
       darkOverlay.visible = hasLights && !isLightTheme;
 
-      // Manage light glow sprites
+      // Manage light glow sprites — trim excess on deletion
+      while (lightSprites.length > world.lightSources.length) {
+        const s = lightSprites.pop()!;
+        environmentContainer.removeChild(s);
+        s.destroy();
+      }
       while (lightSprites.length < world.lightSources.length) {
         const s = new Sprite(lightGlowTexture);
         s.anchor.set(0.5);
@@ -814,24 +819,25 @@ export async function createRenderer(width: number, height: number): Promise<Ren
         lightSprites.push(s);
       }
       for (let i = 0; i < lightSprites.length; i++) {
-        if (i < world.lightSources.length) {
-          const src = world.lightSources[i];
-          lightSprites[i].visible = true;
-          // Dark mode: subtle additive glow. Light mode: shadow zone.
-          lightSprites[i].texture = isLightTheme ? lightShadowTexture : lightGlowTexture;
-          lightSprites[i].blendMode = isLightTheme ? 'normal' : 'add';
-          lightSprites[i].x = src.x;
-          lightSprites[i].y = src.y;
-          lightSprites[i].width = src.radius * 2;
-          lightSprites[i].height = src.radius * 2;
-          const dnMult = world.dayNightEnabled ? getDayNightMultiplier(world.dayNightPhase) : 1;
-          lightSprites[i].alpha = (isLightTheme ? src.intensity * 0.85 : src.intensity * 0.2) * dnMult;
-        } else {
-          lightSprites[i].visible = false;
-        }
+        const src = world.lightSources[i];
+        lightSprites[i].visible = true;
+        // Dark mode: subtle additive glow. Light mode: shadow zone.
+        lightSprites[i].texture = isLightTheme ? lightShadowTexture : lightGlowTexture;
+        lightSprites[i].blendMode = isLightTheme ? 'normal' : 'add';
+        lightSprites[i].x = src.x;
+        lightSprites[i].y = src.y;
+        lightSprites[i].width = src.radius * 2;
+        lightSprites[i].height = src.radius * 2;
+        const dnMult = world.dayNightEnabled ? getDayNightMultiplier(world.dayNightPhase) : 1;
+        lightSprites[i].alpha = (isLightTheme ? src.intensity * 0.85 : src.intensity * 0.2) * dnMult;
       }
 
-      // Manage temperature gradient sprites
+      // Manage temperature gradient sprites — trim excess on deletion
+      while (tempSprites.length > world.temperatureSources.length) {
+        const s = tempSprites.pop()!;
+        environmentContainer.removeChild(s);
+        s.destroy();
+      }
       while (tempSprites.length < world.temperatureSources.length) {
         const s = new Sprite();
         s.anchor.set(0.5);
@@ -839,21 +845,22 @@ export async function createRenderer(width: number, height: number): Promise<Ren
         tempSprites.push(s);
       }
       for (let i = 0; i < tempSprites.length; i++) {
-        if (i < world.temperatureSources.length) {
-          const src = world.temperatureSources[i];
-          tempSprites[i].visible = true;
-          tempSprites[i].texture = src.intensity >= 0 ? tempHotTexture : tempColdTexture;
-          tempSprites[i].x = src.x;
-          tempSprites[i].y = src.y;
-          tempSprites[i].width = src.radius * 2;
-          tempSprites[i].height = src.radius * 2;
-          tempSprites[i].alpha = Math.abs(src.intensity) * 0.5;
-        } else {
-          tempSprites[i].visible = false;
-        }
+        const src = world.temperatureSources[i];
+        tempSprites[i].visible = true;
+        tempSprites[i].texture = src.intensity >= 0 ? tempHotTexture : tempColdTexture;
+        tempSprites[i].x = src.x;
+        tempSprites[i].y = src.y;
+        tempSprites[i].width = src.radius * 2;
+        tempSprites[i].height = src.radius * 2;
+        tempSprites[i].alpha = Math.abs(src.intensity) * 0.5;
       }
 
-      // Manage current source gradient sprites
+      // Manage current source gradient sprites — trim excess on deletion
+      while (currentSprites.length > world.currentSources.length) {
+        const s = currentSprites.pop()!;
+        environmentContainer.removeChild(s);
+        s.destroy();
+      }
       while (currentSprites.length < world.currentSources.length) {
         const s = new Sprite(currentTexture);
         s.anchor.set(0.5);
@@ -861,17 +868,13 @@ export async function createRenderer(width: number, height: number): Promise<Ren
         currentSprites.push(s);
       }
       for (let i = 0; i < currentSprites.length; i++) {
-        if (i < world.currentSources.length) {
-          const src = world.currentSources[i];
-          currentSprites[i].visible = true;
-          currentSprites[i].x = src.x;
-          currentSprites[i].y = src.y;
-          currentSprites[i].width = src.radius * 2;
-          currentSprites[i].height = src.radius * 2;
-          currentSprites[i].alpha = src.strength * 0.3;
-        } else {
-          currentSprites[i].visible = false;
-        }
+        const src = world.currentSources[i];
+        currentSprites[i].visible = true;
+        currentSprites[i].x = src.x;
+        currentSprites[i].y = src.y;
+        currentSprites[i].width = src.radius * 2;
+        currentSprites[i].height = src.radius * 2;
+        currentSprites[i].alpha = src.strength * 0.3;
       }
 
       // ── Reset all blur layers ──

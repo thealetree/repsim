@@ -49,6 +49,8 @@ import {
   FOOD_WHITE_EFFICIENCY,
   FOOD_SCAVENGE_INTERVAL_TICKS,
   FOOD_MAX_PARTICLES,
+  REPRO_FILL_FRACTION,
+  REPRO_METER_MAX,
 } from '../../constants';
 import {
   createSpatialHash,
@@ -210,10 +212,10 @@ function runPhotosynthesis(world: World, config: SimConfig): void {
       if (org.virusInfectionCount > 0) totalLightFeed *= 0.5;
 
       if (totalLightFeed > 0) {
-        org.rootHealthReserve = Math.min(
-          org.rootHealthReserveMax,
-          org.rootHealthReserve + totalLightFeed * config.greenFeed * metabolismMult,
-        );
+        const energyGain = totalLightFeed * config.greenFeed * metabolismMult;
+        org.rootHealthReserve = Math.min(org.rootHealthReserveMax, org.rootHealthReserve + energyGain);
+        // Active energy fills repro meter (replaces old passive threshold system)
+        org.reproMeter = Math.min(REPRO_METER_MAX, org.reproMeter + energyGain * REPRO_FILL_FRACTION);
       }
     } else {
       // AMBIENT: original behavior — count greens × greenFeed, scaled by length
@@ -229,10 +231,10 @@ function runPhotosynthesis(world: World, config: SimConfig): void {
       if (org.virusInfectionCount > 0) greenContribution *= 0.5;
 
       if (greenContribution > 0) {
-        org.rootHealthReserve = Math.min(
-          org.rootHealthReserveMax,
-          org.rootHealthReserve + greenContribution * config.greenFeed * metabolismMult,
-        );
+        const energyGain = greenContribution * config.greenFeed * metabolismMult;
+        org.rootHealthReserve = Math.min(org.rootHealthReserveMax, org.rootHealthReserve + energyGain);
+        // Active energy fills repro meter
+        org.reproMeter = Math.min(REPRO_METER_MAX, org.reproMeter + energyGain * REPRO_FILL_FRACTION);
       }
     }
   }
@@ -492,6 +494,7 @@ function runRedAttack(world: World, config: SimConfig): void {
         // Kill bonus: finishing a segment is rewarded
         if (seg.health[j] <= 0) {
           org.rootHealthReserve += RED_KILL_BONUS;
+          org.reproMeter = Math.min(REPRO_METER_MAX, org.reproMeter + RED_KILL_BONUS * REPRO_FILL_FRACTION);
 
           // Mark the victim organism so energy-on-kill fires in removeOrganism
           const victimOrg = world.organisms.get(seg.organismId[j]);
@@ -503,6 +506,8 @@ function runRedAttack(world: World, config: SimConfig): void {
         // Attacker gains HP (predator-prey reward)
         org.rootHealthReserve += damage * RED_ATTACK_HP_GAIN_FRACTION;
         org.rootHealthReserve = Math.min(org.rootHealthReserve, org.rootHealthReserveMax);
+        // Active energy fills repro meter (use base damage, not 12x multiplied gain)
+        org.reproMeter = Math.min(REPRO_METER_MAX, org.reproMeter + damage * REPRO_FILL_FRACTION);
 
         didAttack = true;
         break; // One target per red segment per attack
@@ -584,8 +589,11 @@ function runScavenging(world: World, config: SimConfig): void {
 
         // Eat the food
         const { energy, wasViral, viralColor } = consumeFood(world.food, fi);
-        org.rootHealthReserve += energy * orgEfficiency;
+        const foodEnergy = energy * orgEfficiency;
+        org.rootHealthReserve += foodEnergy;
         org.rootHealthReserve = Math.min(org.rootHealthReserve, org.rootHealthReserveMax);
+        // Active energy fills repro meter
+        org.reproMeter = Math.min(REPRO_METER_MAX, org.reproMeter + foodEnergy * REPRO_FILL_FRACTION);
 
         // Viral food: infect the eating organism with a strain matching the food's color
         if (wasViral && config.virusEnabled) {

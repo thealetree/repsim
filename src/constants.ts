@@ -78,9 +78,8 @@ export const REPLENISH_INTERVAL_TICKS = 15;     // ~0.75 seconds at 20 ticks/sec
 // ─── Reproduction Constants ──────────────────────────────────
 
 export const REPRO_METER_MAX = 3001;            // Meter must reach this to trigger reproduction
-export const REPRO_METER_FILL = 100;            // Amount added per fill tick when healthy
-export const REPRO_METER_FILL_INTERVAL = 10;    // ~0.5 seconds at 20 ticks/sec
-// REPRO_HEALTH_THRESHOLD — now size-scaled via getReproThreshold()
+export const REPRO_FILL_FRACTION = 0.67;        // Fraction of active energy gain that fills repro meter
+// Meter is filled by active energy: photosynthesis, food eating, predation (in behaviors.ts)
 // ASEXUAL_REPRO_COST — now size-scaled via getReproCost()
 export const SEXUAL_REPRO_RANGE = 300;           // Root-to-root distance for mate finding (world units, was 150)
 export const STRUCTURAL_MUTATION_CHANCE = 0.15;  // 15% chance per child of gaining/losing a segment
@@ -336,17 +335,19 @@ export const MAX_LIGHT_SOURCES = 5;
 export const MAX_TEMPERATURE_SOURCES = 5;
 
 // Light source defaults and ranges
-export const LIGHT_DEFAULT_RADIUS = 400;
+export const LIGHT_DEFAULT_RADIUS = 800;       // Was 400 — old max is now default
 export const LIGHT_MIN_RADIUS = 100;
-export const LIGHT_MAX_RADIUS = 800;
-export const LIGHT_DEFAULT_INTENSITY = 0.2;
-export const LIGHT_RESIZE_SPEED = 20;         // World units per scroll tick
+export const LIGHT_MAX_RADIUS = 1600;          // Doubled from 800
+export const LIGHT_DEFAULT_INTENSITY = 1.0;    // Was 0.2 — old max (1.0) is now default
+export const LIGHT_MAX_INTENSITY = 2.0;        // New max — double old max
+export const LIGHT_RESIZE_SPEED = 20;          // World units per scroll tick
 
 // Temperature source defaults and ranges
-export const TEMP_DEFAULT_RADIUS = 300;
+export const TEMP_DEFAULT_RADIUS = 600;        // Was 300 — old max is now default
 export const TEMP_MIN_RADIUS = 100;
-export const TEMP_MAX_RADIUS = 600;
-export const TEMP_DEFAULT_INTENSITY = 0.5;     // Positive = hot
+export const TEMP_MAX_RADIUS = 1200;           // Doubled from 600
+export const TEMP_DEFAULT_INTENSITY = 1.0;     // Was 0.5 — old max is now default (positive = hot)
+export const TEMP_MAX_INTENSITY = 2.0;         // New max — double old max
 export const TEMP_RESIZE_SPEED = 15;
 
 // Viscosity tuning
@@ -359,11 +360,12 @@ export const TEMP_METABOLISM_MAX = 1.5;        // Hot speeds up metabolism 1.5x
 
 // Current source defaults and ranges
 export const MAX_CURRENT_SOURCES = 5;
-export const CURRENT_DEFAULT_RADIUS = 300;
+export const CURRENT_DEFAULT_RADIUS = 600;     // Was 300 — old max is now default
 export const CURRENT_MIN_RADIUS = 100;
-export const CURRENT_MAX_RADIUS = 600;
-export const CURRENT_DEFAULT_STRENGTH = 0.5;
-export const CURRENT_RESIZE_SPEED = 15;         // World units per scroll tick
+export const CURRENT_MAX_RADIUS = 1200;        // Doubled from 600
+export const CURRENT_DEFAULT_STRENGTH = 1.0;   // Was 0.5 — old max is now default
+export const CURRENT_MAX_STRENGTH = 2.0;       // New max — double old max
+export const CURRENT_RESIZE_SPEED = 15;        // World units per scroll tick
 export const CURRENT_FORCE_SCALE = 1.5;         // Base prevPos shift per tick at max strength
 export const CURRENT_COLOR = 0x22cccc;          // Cyan/teal for rendering
 
