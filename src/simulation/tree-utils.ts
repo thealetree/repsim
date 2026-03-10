@@ -14,6 +14,7 @@
  */
 
 import type { Genome, GenomeTopology } from '../types';
+import { SEGMENT_CHAIN_DISTANCE } from '../constants';
 
 
 /**
@@ -39,7 +40,29 @@ export function buildGenomeTopology(genome: Genome): GenomeTopology {
 
   const isLeaf = childCount.map(c => c === 0);
 
-  return { children, childCount, isLeaf, depth };
+  // Pre-compute cumulative angles and chain distances for angular constraint optimization.
+  // cumulativeAngle[i] = sum of genome[k].angle along path from root to gene i.
+  // Using angle-addition identities at runtime avoids per-segment trig in the hot loop.
+  const cumulativeAngle = new Float64Array(n);
+  const cosCumAngle = new Float64Array(n);
+  const sinCumAngle = new Float64Array(n);
+  const chainDist = new Float64Array(n);
+
+  cosCumAngle[0] = 1;  // cos(0)
+  sinCumAngle[0] = 0;  // sin(0)
+  chainDist[0] = 0;    // root has no parent chain
+
+  for (let i = 1; i < n; i++) {
+    const p = genome[i].parent;
+    cumulativeAngle[i] = cumulativeAngle[p] + genome[i].angle;
+    cosCumAngle[i] = Math.cos(cumulativeAngle[i]);
+    sinCumAngle[i] = Math.sin(cumulativeAngle[i]);
+    const pLen = genome[p].length || 1;
+    const cLen = genome[i].length || 1;
+    chainDist[i] = SEGMENT_CHAIN_DISTANCE * Math.sqrt((pLen + cLen) / 2);
+  }
+
+  return { children, childCount, isLeaf, depth, cosCumAngle, sinCumAngle, chainDist };
 }
 
 

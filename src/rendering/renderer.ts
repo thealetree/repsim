@@ -169,6 +169,19 @@ export async function createRenderer(width: number, height: number): Promise<Ren
     blurLayers.push({ container, sprites: [], active: 0 });
   }
 
+  // Pre-allocate sprite pools to eliminate mid-frame Sprite allocation at peak population.
+  // 1000 orgs × 15 max segments / 7 layers ≈ 2143, plus food headroom ≈ 2500 per layer.
+  const SPRITES_PER_LAYER = 2500;
+  for (const layer of blurLayers) {
+    for (let s = 0; s < SPRITES_PER_LAYER; s++) {
+      const sprite = new Sprite();
+      sprite.anchor.set(0.5);
+      sprite.visible = false;
+      layer.container.addChild(sprite);
+      layer.sprites.push(sprite);
+    }
+  }
+
   // ── Selection highlight layer (on top of organisms, below tank edge) ──
   const selectionGraphics = new Graphics();
   worldContainer.addChild(selectionGraphics);
@@ -885,6 +898,11 @@ export async function createRenderer(width: number, height: number): Promise<Ren
       const seg = world.segments;
       const fd = focusDepth;
 
+      // Pre-resolve light alpha coefficients (avoids isLightTheme branch per segment)
+      const useLightAlpha = hasLights && segmentLightCache != null;
+      const lightAlphaA = isLightTheme ? 1.0 : 0.3;
+      const lightAlphaB = isLightTheme ? -0.35 : 0.7;
+
       // ── Iterate organisms ──
       for (const org of world.organisms.values()) {
         if (!org.alive) continue;
@@ -950,7 +968,7 @@ export async function createRenderer(width: number, height: number): Promise<Ren
             sprite.texture = segmentTextures[colorKey] ?? segmentTextures[0];
           }
 
-          sprite.tint = 0xFFFFFF; // Texture handles color — no extra tint needed
+          if (sprite.tint !== 0xFFFFFF) sprite.tint = 0xFFFFFF; // Avoid PixiJS dirty flag when unchanged
           sprite.x = seg.x[idx] + orgParallaxX;
           sprite.y = seg.y[idx] + orgParallaxY;
 
@@ -1002,12 +1020,8 @@ export async function createRenderer(width: number, height: number): Promise<Ren
 
           // Modulate alpha by light when light sources are present
           let baseAlpha = depthAlpha;
-          if (hasLights && segmentLightCache) {
-            if (isLightTheme) {
-              baseAlpha = depthAlpha * (1.0 - 0.35 * segmentLightCache[idx]);
-            } else {
-              baseAlpha = depthAlpha * (0.3 + 0.7 * segmentLightCache[idx]);
-            }
+          if (useLightAlpha) {
+            baseAlpha = depthAlpha * (lightAlphaA + lightAlphaB * segmentLightCache![idx]);
           }
 
           // Virus: subtle pulse on infected segments
@@ -1025,8 +1039,10 @@ export async function createRenderer(width: number, height: number): Promise<Ren
       const food = world.food;
       if (food.count > 0) {
         const normalFoodTex = isLightTheme ? foodTextureLight : foodTextureDark;
+        let foodSeen = 0;
         for (let fi = 0; fi < FOOD_MAX_PARTICLES; fi++) {
           if (!food.alive[fi]) continue;
+          foodSeen++;
 
           const foodSharpness = 1 - Math.abs(food.depth[fi] - fd);
           const layerIdx = Math.min(
@@ -1085,8 +1101,9 @@ export async function createRenderer(width: number, height: number): Promise<Ren
           const s = foodScale * (isViral ? 0.7 : 0.5);
           sprite.scale.set(s, s);
           sprite.alpha = alpha;
-          sprite.tint = 0xFFFFFF; // Reset tint (textures handle color)
+          if (sprite.tint !== 0xFFFFFF) sprite.tint = 0xFFFFFF; // Avoid PixiJS dirty flag
           layer.active++;
+          if (foodSeen >= food.count) break; // All alive food rendered
         }
       }
 

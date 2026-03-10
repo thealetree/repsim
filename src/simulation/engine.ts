@@ -122,9 +122,13 @@ export function createSimulationEngine(
       events.emit('sim:paused', { paused });
     },
 
-    /** Set speed multiplier (1, 2, or 4) */
+    /** Set speed multiplier (1, 2, 4, or 8) */
     setSpeed(speed: number): void {
       engine.speed = speed;
+      // Clamp accumulator so downshifting feels instant (no backlog from old speed)
+      if (engine.accumulator > SIM_DT) {
+        engine.accumulator = SIM_DT;
+      }
     },
 
     /** Reset the entire simulation from scratch */

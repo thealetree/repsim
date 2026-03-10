@@ -112,8 +112,11 @@ export function updateFood(food: FoodParticles, tick: number, tankCells: Set<str
 
   const gs = TANK_GRID_SPACING;
 
+  const toVisit = food.count; // Capture before loop (decay reduces count)
+  let visited = 0;
   for (let i = 0; i < FOOD_MAX_PARTICLES; i++) {
     if (!food.alive[i]) continue;
+    visited++;
 
     // Decay check — viral food decays in half the time
     const decayLimit = food.isViral[i] ? decayTicks >> 1 : decayTicks;
@@ -121,6 +124,7 @@ export function updateFood(food: FoodParticles, tick: number, tankCells: Set<str
       food.alive[i] = 0;
       food.freeSlots.push(i);
       food.count--;
+      if (visited >= toVisit) break;
       continue;
     }
 
@@ -140,6 +144,8 @@ export function updateFood(food: FoodParticles, tick: number, tankCells: Set<str
       food.driftDx[i] *= -1;
       food.driftDy[i] *= -1;
     }
+
+    if (visited >= toVisit) break;
   }
 }
 

@@ -104,6 +104,12 @@ export interface GenomeTopology {
   isLeaf: boolean[];
   /** depth[i] = distance from root (root = 0) */
   depth: number[];
+  /** cos(cumulative angle from root to gene i) — pre-computed at spawn for angular constraints */
+  cosCumAngle: Float64Array;
+  /** sin(cumulative angle from root to gene i) — pre-computed at spawn for angular constraints */
+  sinCumAngle: Float64Array;
+  /** Pre-computed chain distance per gene (0 for root) */
+  chainDist: Float64Array;
 }
 
 

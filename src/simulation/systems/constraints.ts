@@ -57,7 +57,6 @@ const spatialHash = createSpatialHash();
 
 // Module-level scratch buffers for angular constraints.
 // Reused every frame to avoid garbage collection. MAX_SEGMENTS = 15.
-const _incomingAngle = new Float64Array(MAX_SEGMENTS);
 const _restX = new Float64Array(MAX_SEGMENTS);
 const _restY = new Float64Array(MAX_SEGMENTS);
 
@@ -199,9 +198,8 @@ export function enforceChainConstraints(world: World): void {
 
       const dx = seg.x[b] - seg.x[a];
       const dy = seg.y[b] - seg.y[a];
-
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 0.001) continue;
+      const distSq = dx * dx + dy * dy;
+      if (distSq < 0.000001) continue; // same as dist < 0.001
 
       let restDist = seg.restLength[b] || SEGMENT_CHAIN_DISTANCE;
 
@@ -216,6 +214,11 @@ export function enforceChainConstraints(world: World): void {
         }
       }
 
+      // Skip sqrt when segment is already near rest distance (correction < ~1%)
+      const restDistSq = restDist * restDist;
+      if (Math.abs(distSq - restDistSq) < 0.0002 * restDistSq) continue;
+
+      const dist = Math.sqrt(distSq);
       const diff = (restDist - dist) / dist;
       const corrX = dx * diff * 0.5;
       const corrY = dy * diff * 0.5;
@@ -274,21 +277,21 @@ export function enforceAngularConstraints(world: World): void {
 
     const effectiveBase = baseAngle - org.genome[firstChildGeneIdx].angle;
 
-    // Compute rest positions in topological order using scratch buffers
-    _incomingAngle[0] = effectiveBase;
+    // Only 2 trig calls per organism (not per segment!) using angle-addition identity:
+    // cos(base + cumAngle[i]) = cosBase*cosCum[i] - sinBase*sinCum[i]
+    // sin(base + cumAngle[i]) = sinBase*cosCum[i] + cosBase*sinCum[i]
+    const cosBase = Math.cos(effectiveBase);
+    const sinBase = Math.sin(effectiveBase);
+
     _restX[0] = seg.x[root];
     _restY[0] = seg.y[root];
 
     for (let i = 1; i < org.segmentCount; i++) {
       const geneParent = org.genome[i].parent;
-      const outAngle = _incomingAngle[geneParent] + org.genome[i].angle;
-      _incomingAngle[i] = outAngle;
-
-      const parentLen = org.genome[geneParent].length || 1;
-      const childLen = org.genome[i].length || 1;
-      const chainDist = SEGMENT_CHAIN_DISTANCE * Math.sqrt((parentLen + childLen) / 2);
-      _restX[i] = _restX[geneParent] + Math.cos(outAngle) * chainDist;
-      _restY[i] = _restY[geneParent] + Math.sin(outAngle) * chainDist;
+      const cosAngle = cosBase * topology.cosCumAngle[i] - sinBase * topology.sinCumAngle[i];
+      const sinAngle = sinBase * topology.cosCumAngle[i] + cosBase * topology.sinCumAngle[i];
+      _restX[i] = _restX[geneParent] + cosAngle * topology.chainDist[i];
+      _restY[i] = _restY[geneParent] + sinAngle * topology.chainDist[i];
     }
 
     // Apply corrections for all segments except root and the reference child
