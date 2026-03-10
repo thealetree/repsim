@@ -236,21 +236,22 @@ export function enforceChainConstraints(world: World): void {
 /**
  * Angular Constraints — Make organisms hold their genetic shape
  *
- * ROTATION-BASED APPROACH: Instead of computing ideal "rest positions" and
- * linearly blending toward them (which injects distance errors that fight
- * chain constraints), we ROTATE each segment around its parent by a fraction
- * of the angle error. This preserves current chain distances by construction,
- * eliminating the oscillation/spinning that tight angles caused.
+ * HYBRID APPROACH: Combines genome-based global shape restoration with
+ * rotation-based corrections that preserve chain distances.
  *
- * TREE-AWARE: Processes segments in topological order (index order).
- * Uses ACTUAL parent incoming angles (from current positions), not ideal ones.
- * This means each iteration builds on real geometry rather than fighting it.
+ * Step 1: Compute DESIRED angles by propagating genome angles from the
+ *         organism's current orientation (effectiveBase). This gives the
+ *         globally-correct direction for every segment, exactly like the
+ *         original rest-position approach.
+ *
+ * Step 2: For each segment, compute the error between its desired direction
+ *         and its actual current direction, then ROTATE it around its parent
+ *         by (error × stiffness). Unlike linear blending toward rest positions,
+ *         rotation preserves the current chain distance — no fighting between
+ *         angular and chain constraints, which eliminates tight-angle spinning.
  *
  * The organism's current orientation comes from the root→first-child direction.
  * Organisms can freely rotate as a whole, but internal angles are maintained.
- *
- * CONVERGENCE: With stiffness 0.7 per iteration × 3 iterations, residual
- * error = (1 - 0.7)³ = 2.7%. No overcorrection, no oscillation.
  *
  * CRITICAL: Both pos and prevPos are adjusted by the same delta.
  * This prevents the angular constraint from injecting rotational velocity.
@@ -285,21 +286,18 @@ export function enforceAngularConstraints(world: World): void {
     //   effectiveBase = baseAngle - genome[firstChildGeneIdx].angle
     const effectiveBase = baseAngle - org.genome[firstChildGeneIdx].angle;
 
-    // Compute ACTUAL incoming angles at each segment from current positions.
-    // Root uses effectiveBase; all others use atan2(seg - parent).
+    // Step 1: Compute DESIRED angles from genome propagation.
+    // These represent the globally-correct direction for each segment,
+    // anchored to the organism's current orientation (effectiveBase).
     _incomingAngle[0] = effectiveBase;
     for (let i = 1; i < org.segmentCount; i++) {
-      const parentGlobal = root + org.genome[i].parent;
-      const idx = root + i;
-      _incomingAngle[i] = Math.atan2(
-        seg.y[idx] - seg.y[parentGlobal],
-        seg.x[idx] - seg.x[parentGlobal],
-      );
+      const geneParent = org.genome[i].parent;
+      _incomingAngle[i] = _incomingAngle[geneParent] + org.genome[i].angle;
     }
 
-    // Rotate each non-reference segment toward its desired angle.
-    // Desired angle = parent's actual incoming angle + gene's turn angle.
-    // Rotation around parent preserves the current chain distance.
+    // Step 2: Rotate each non-reference segment toward its desired direction.
+    // Rotation around parent preserves current chain distance — no fighting
+    // with chain constraints, eliminating tight-angle oscillation/spinning.
     for (let i = 1; i < org.segmentCount; i++) {
       if (i === firstChildGeneIdx) continue; // reference child — skip
 
@@ -309,21 +307,25 @@ export function enforceAngularConstraints(world: World): void {
       const parentGeneIdx = org.genome[i].parent;
       const parentGlobal = root + parentGeneIdx;
 
-      // Desired angle: parent's incoming direction + this gene's turn angle
-      const desiredAngle = _incomingAngle[parentGeneIdx] + org.genome[i].angle;
-      const currentAngle = _incomingAngle[i];
+      // Desired direction from genome propagation
+      const desiredAngle = _incomingAngle[i];
 
-      // Angle error normalized to [-π, π]
-      let angleError = desiredAngle - currentAngle;
-      if (angleError > Math.PI) angleError -= Math.PI * 2;
-      else if (angleError < -Math.PI) angleError += Math.PI * 2;
+      // Actual current direction from parent to this segment
+      const dx = seg.x[idx] - seg.x[parentGlobal];
+      const dy = seg.y[idx] - seg.y[parentGlobal];
+      const currentAngle = Math.atan2(dy, dx);
+
+      // Angle error normalized to [-π, π].
+      // MUST use atan2(sin,cos) because genome-propagated angles can accumulate
+      // far beyond ±π (e.g. a chain of +90° turns → 10π+). A simple if/else
+      // only handles errors near ±2π and would create catastrophic corrections.
+      const rawError = desiredAngle - currentAngle;
+      const angleError = Math.atan2(Math.sin(rawError), Math.cos(rawError));
 
       const delta = angleError * stiffness;
 
       // Rotate the (dx, dy) vector around parent by delta.
       // This preserves the current distance — no chain constraint fighting!
-      const dx = seg.x[idx] - seg.x[parentGlobal];
-      const dy = seg.y[idx] - seg.y[parentGlobal];
       const cosD = Math.cos(delta);
       const sinD = Math.sin(delta);
       const newDx = dx * cosD - dy * sinD;
@@ -632,18 +634,21 @@ function applyCurrentForces(world: World): void {
 
 
 /**
- * Brownian Rotation — Prevents systematic wall-alignment bias
+ * Brownian Rotation — Prevents organisms from locking into fixed orientations
  *
- * Organisms without yellow segments have no source of rotation. Wall collisions
- * systematically rotate elongated bodies to align parallel to nearby walls,
- * creating an unnatural horizontal alignment in wider tank regions.
+ * Without external torque, organisms (especially small 2-3 segment ones) get
+ * locked into whatever orientation they're born with. Collisions translate
+ * organisms but barely rotate them because chain constraints distribute
+ * velocity evenly across segments.
  *
- * This simulates thermal Brownian rotation: a tiny random angular displacement
+ * This simulates thermal Brownian rotation: a random angular displacement
  * each tick. All segments rotate equally around the root, preserving internal
  * angles and chain distances. Both pos and prevPos move, so no velocity is
  * injected — it's a pure orientation change.
  *
- * Random walk: after ~1 minute RMS drift ≈ 16°, after ~5 minutes ≈ 35°.
+ * Applied to ALL organisms (including those with yellow) because even
+ * yellow organisms only get torque when actively thrusting, and their
+ * thrust is often symmetric (no net rotation).
  */
 function applyBrownianRotation(world: World): void {
   const seg = world.segments;
@@ -651,7 +656,6 @@ function applyBrownianRotation(world: World): void {
 
   for (const org of world.organisms.values()) {
     if (!org.alive || org.segmentCount < 2) continue;
-    if (org.hasYellow) continue; // Yellow organisms rotate from thrust
 
     const root = org.firstSegment;
     if (!seg.alive[root]) continue;
