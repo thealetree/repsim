@@ -331,7 +331,7 @@ export const MAX_ADJACENT_DEPTH_DIFF = 1 / BLUR_LAYER_COUNT; // Max depth diff b
 
 
 // ─── Environment Constants ──────────────────────────────────
-export const AMBIENT_LIGHT_FLOOR = 0.15;                    // Min light for greens in darkness (15% of full)
+export const AMBIENT_LIGHT_FLOOR = 0;                       // No photosynthesis in total darkness
 export const MAX_LIGHT_SOURCES = 5;
 export const MAX_TEMPERATURE_SOURCES = 5;
 
