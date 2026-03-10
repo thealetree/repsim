@@ -138,6 +138,10 @@ export function injectEnvironmentPanelStyles(): void {
       background: var(--ui-slider-thumb);
       cursor: pointer;
     }
+    .env-slider-row.slider-disabled {
+      opacity: 0.3;
+      pointer-events: none;
+    }
     .env-slider-val {
       font-size: 10px;
       color: var(--ui-text-muted);
@@ -296,7 +300,7 @@ export function createEnvironmentPanel(
         <div class="bottom-section-title">Environment</div>
         <div class="env-slider-row">
           <span class="env-slider-label">Light</span>
-          <input type="range" id="env-light" min="10" max="190" step="10" value="${engine.config.greenFeed}">
+          <input type="range" id="env-light" min="0" max="190" step="10" value="${engine.config.greenFeed}">
           <span class="env-slider-val" id="env-light-val">${engine.config.greenFeed}</span>
         </div>
         <div class="env-slider-row">
@@ -450,12 +454,19 @@ export function createEnvironmentPanel(
     dnSpeedVal.textContent = engine.world.dayNightSpeed.toFixed(2);
   });
 
-  // ── Update phase indicator bar + day/night grayout ──
+  // ── Update phase indicator bar + light/day-night grayout ──
+  const lightSliderRow = lightSlider.closest('.env-slider-row') as HTMLElement;
   const phaseBar = document.getElementById('env-daynight-phase')!;
   const daynightControls = document.getElementById('daynight-controls')!;
   events.on('stats:updated', () => {
-    // Gray out day/night when no light sources
+    // Gray out light slider + force to 0 when light sources are placed
     const hasLights = engine.world.lightSources.length > 0;
+    lightSliderRow.classList.toggle('slider-disabled', hasLights);
+    if (hasLights && engine.config.greenFeed !== 0) {
+      engine.config.greenFeed = 0;
+      lightSlider.value = '0';
+      lightVal.textContent = '0';
+    }
     daynightControls.classList.toggle('disabled', !hasLights);
 
     if (engine.world.dayNightEnabled && hasLights) {
