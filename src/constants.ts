@@ -246,7 +246,7 @@ export const SEGMENT_RENDER_COLORS: Record<number, number> = {
   1: 0x4488ff,  // Blue — HP reserve
   2: 0xffcc22,  // Yellow — movement
   3: 0xff4444,  // Red — attack
-  4: 0x2a2a3a,  // Black — sexual reproduction (slightly lighter than BG for visibility)
+  4: 0x9944cc,  // Purple — sexual reproduction (visible against dark BG)
   5: 0xeeeedd,  // White — scavenger (off-white/ivory)
 };
 
@@ -432,7 +432,7 @@ export const VIRUS_DARK_RENDER_COLORS: Record<number, number> = {
   1: 0x1a3a8a,  // Dark blue
   2: 0x8a6a0a,  // Dark amber/yellow
   3: 0x8a1a1a,  // Dark red
-  4: 0x12121e,  // Dark black (near background)
+  4: 0x4a1a6a,  // Dark purple (infected)
   5: 0x6a6a5a,  // Dark white/gray
 };
 
