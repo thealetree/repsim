@@ -76,25 +76,50 @@ function createEmptySlots(): SaveSlot[] {
   return Array.from({ length: SLOT_COUNT }, () => ({ name: null, data: null }));
 }
 
-/** Generate a TankPayload for the default plus/cross tank at runtime.
- *  Uses the same cell math as initDefaultTankCells() in world.ts. */
+/** Generate a TankPayload for the default complex cross tank at runtime.
+ *  Must match initDefaultTankCells() + initDefaultEnvironment() in world.ts. */
 function generateDefaultTankPayload(): TankPayload {
-  const HALF_WIDTH = 1200;   // TANK_HALF_WIDTH
-  const HALF_HEIGHT = 800;   // TANK_HALF_HEIGHT
-  const SPACING = 80;        // TANK_GRID_SPACING
-  const halfCols = Math.floor(HALF_WIDTH / SPACING);
-  const halfRows = Math.floor(HALF_HEIGHT / SPACING);
-  const armHalf = 5;
-
   const tank: [number, number][] = [];
-  for (let col = -halfCols; col < halfCols; col++) {
-    for (let row = -halfRows; row < halfRows; row++) {
-      if (Math.abs(row) < armHalf || Math.abs(col) < armHalf) {
-        tank.push([col, row]);
+
+  for (let col = -22; col <= 17; col++) {
+    for (let row = -18; row <= 17; row++) {
+      let include = false;
+
+      if (row >= -18 && row <= -12) {
+        include = col >= -10 && col <= 5;
+      } else if (row >= -11 && row <= -9) {
+        include = col >= -1 && col <= 2;
+      } else if (row >= -8 && row <= -3) {
+        include = (col >= -22 && col <= -14) || (col >= -10 && col <= 5) || (col >= 9 && col <= 17);
+      } else if (row >= -2 && row <= 1) {
+        include = col >= -22 && col <= 17;
+      } else if (row >= 2 && row <= 7) {
+        include = (col >= -22 && col <= -14) || (col >= -10 && col <= 5) || (col >= 9 && col <= 17);
+      } else if (row >= 8 && row <= 10) {
+        include = col >= -1 && col <= 2;
+      } else if (row >= 11 && row <= 17) {
+        include = col >= -10 && col <= 5;
       }
+
+      if (include) tank.push([col, row]);
     }
   }
-  return { v: 1, tank };
+
+  return {
+    v: 1,
+    tank,
+    lights: [
+      { id: 1, x: -1464, y: -45, radius: 800, intensity: 2 },
+      { id: 2, x: 1093, y: 6, radius: 950, intensity: 2 },
+    ],
+    temps: [
+      { id: 1, x: -156, y: -1216, radius: 1100, intensity: 2 },
+      { id: 2, x: -137, y: 1241, radius: 1010, intensity: -2 },
+    ],
+    currents: [
+      { id: 1, x: -152, y: 53, radius: 600, strength: 1, type: 0, direction: 0 },
+    ],
+  };
 }
 
 function loadSaveSlots(): SaveSlot[] {

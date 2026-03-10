@@ -12,8 +12,8 @@ import type { SimConfig } from './types';
 // These match V1's SetParams.cs defaults exactly
 
 export const DEFAULT_CONFIG: SimConfig = {
-  repCount: 100,          // Start with 100 organisms — large starting population
-  repLimit: 500,          // Cap at 500 — large ecosystem with selection pressure
+  repCount: 250,          // Start with 250 organisms — fills the complex default tank
+  repLimit: 1000,         // Cap at 1000 — large ecosystem with selection pressure
   asexMutationRate: 1,    // 1% per gene — slow enough to see lineages, fast enough to evolve
   sexMutationRate: 2,     // 2% per gene — sexual repro already mixes, so slightly higher
   sexGeneComboRate: 15,   // 15% recessive gene chance — dominant parent matters
@@ -214,8 +214,8 @@ export const BROWNIAN_ROTATION_STRENGTH = 0.02;  // Radians per tick of random s
 // and sets up for future layout editing (walls, dividers snap to grid).
 // Organisms are tiny relative to the tank — lots of space to explore.
 
-export const TANK_HALF_WIDTH = 1200;             // Half-width of DEFAULT tank in world units (total 2400)
-export const TANK_HALF_HEIGHT = 880;             // Half-height of DEFAULT tank in world units (total 1760)
+export const TANK_HALF_WIDTH = 1760;             // Nominal half-width (40 cols × 80px / 2 + margin). Grid cells define actual shape.
+export const TANK_HALF_HEIGHT = 1440;            // Nominal half-height (36 rows × 80px / 2). Grid cells define actual shape.
 export const TANK_MAX_EXTENT = 12000;            // Max world-space extent in any direction (~10x default)
 
 

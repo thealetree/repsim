@@ -180,22 +180,83 @@ export function getRandomTankPosition(world: World): { x: number; y: number } {
   };
 }
 
-/** Initialize tankCells as a plus/cross shape — the default Repsim tank */
+/**
+ * Initialize tankCells as the default Repsim tank — a complex cross with
+ * internal corridors and corner rooms. This creates distinct ecological niches:
+ * top/bottom arms, left/right rooms, narrow corridors, and a wide center.
+ *
+ * Layout (# = cell, . = wall/empty):
+ *   ............################............   rows -18 to -12: top arm (16 wide)
+ *   ..................####..................   rows -11 to -9: narrow corridor (4 wide)
+ *   #########...################...#########  rows -8 to -3: rooms + center
+ *   ########################################  rows -2 to 1: full width (40)
+ *   #########...################...#########  rows 2 to 7: rooms + center
+ *   ..................####..................   rows 8 to 10: narrow corridor (4 wide)
+ *   ............################............   rows 11 to 17: bottom arm (16 wide)
+ */
 export function initDefaultTankCells(world: World): void {
   world.tankCells.clear();
-  const halfCols = Math.floor(TANK_HALF_WIDTH / TANK_GRID_SPACING);
-  const halfRows = Math.floor(TANK_HALF_HEIGHT / TANK_GRID_SPACING);
-  const armHalf = 5;  // Half-width of cross arms in cells (9 cells = 720 world units)
 
-  for (let col = -halfCols; col < halfCols; col++) {
-    for (let row = -halfRows; row < halfRows; row++) {
-      // Plus shape: include if in horizontal arm OR vertical arm
-      if (Math.abs(row) < armHalf || Math.abs(col) < armHalf) {
+  for (let col = -22; col <= 17; col++) {
+    for (let row = -18; row <= 17; row++) {
+      let include = false;
+
+      if (row >= -18 && row <= -12) {
+        // Top arm: cols -10 to 5 (16 wide)
+        include = col >= -10 && col <= 5;
+      } else if (row >= -11 && row <= -9) {
+        // Narrow corridor: cols -1 to 2 (4 wide)
+        include = col >= -1 && col <= 2;
+      } else if (row >= -8 && row <= -3) {
+        // Left room (cols -22 to -14) + center (cols -10 to 5) + right room (cols 9 to 17)
+        include = (col >= -22 && col <= -14) || (col >= -10 && col <= 5) || (col >= 9 && col <= 17);
+      } else if (row >= -2 && row <= 1) {
+        // Full width: cols -22 to 17 (40 wide)
+        include = col >= -22 && col <= 17;
+      } else if (row >= 2 && row <= 7) {
+        // Left room + center + right room (same as rows -8 to -3)
+        include = (col >= -22 && col <= -14) || (col >= -10 && col <= 5) || (col >= 9 && col <= 17);
+      } else if (row >= 8 && row <= 10) {
+        // Narrow corridor: cols -1 to 2 (4 wide)
+        include = col >= -1 && col <= 2;
+      } else if (row >= 11 && row <= 17) {
+        // Bottom arm: cols -10 to 5 (16 wide)
+        include = col >= -10 && col <= 5;
+      }
+
+      if (include) {
         world.tankCells.add(cellKey(col, row));
       }
     }
   }
   world.tankCellsDirty = true;
+}
+
+/**
+ * Initialize the default environment sources for the complex cross tank.
+ * Creates ecological gradients: lit corridors (left/right lights),
+ * hot top + cold bottom temperature zones, and a gentle center current.
+ */
+export function initDefaultEnvironment(world: World): void {
+  // Two lights in the left and right arms
+  world.lightSources = [
+    { id: 1, x: -1464, y: -45, radius: 800, intensity: 2 },
+    { id: 2, x: 1093, y: 6, radius: 950, intensity: 2 },
+  ];
+  world.nextLightSourceId = 3;
+
+  // Hot top, cold bottom — creates a temperature gradient
+  world.temperatureSources = [
+    { id: 1, x: -156, y: -1216, radius: 1100, intensity: 2 },
+    { id: 2, x: -137, y: 1241, radius: 1010, intensity: -2 },
+  ];
+  world.nextTemperatureSourceId = 3;
+
+  // Gentle center current (whirlpool type, direction 0)
+  world.currentSources = [
+    { id: 1, x: -152, y: 53, radius: 600, strength: 1, type: 0, direction: 0 },
+  ];
+  world.nextCurrentSourceId = 2;
 }
 
 
@@ -242,6 +303,7 @@ export function createWorld(config: SimConfig = DEFAULT_CONFIG): World {
   };
 
   initDefaultTankCells(world);
+  initDefaultEnvironment(world);
   return world;
 }
 
