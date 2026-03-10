@@ -154,7 +154,7 @@ export const LENGTH_MUTATION_DRIFT = 0.3;  // ±drift per mutation event
 // Per-color default length ranges — color determines natural size distribution
 export const COLOR_LENGTH_RANGES: Record<number, [number, number]> = {
   0: [0.6, 2.0],   // Green: moderate (leaves/canopy)
-  1: [1.0, 3.0],   // Blue: longest (backbone/scaffold)
+  1: [0.8, 2.0],   // Blue: moderate (backbone/scaffold — was 1.0-3.0, too dominant visually and in HP)
   2: [1.0, 2.8],   // Yellow: long (flagella/fins)
   3: [0.6, 2.4],   // Red: wide range — bigger spikes = quadratically more damage
   4: [0.5, 0.8],   // Black: shortest (compact reproductive)
@@ -206,7 +206,7 @@ export const CHAIN_CONSTRAINT_ITERATIONS = 3;   // How many times to enforce cha
 export const SEGMENT_CHAIN_DISTANCE = SEGMENT_RADIUS * 1.6; // Target distance between connected segments (tighter for branch overlap)
 export const COLLISION_PUSH_STRENGTH = 0.8;     // How hard segments push apart on overlap
 export const ANGULAR_CONSTRAINT_STIFFNESS = 0.7; // How strongly organisms hold their genetic shape (per iteration, was 0.5)
-export const BROWNIAN_ROTATION_STRENGTH = 0.015;  // Radians per tick of random spin (~17°/s random walk)
+export const BROWNIAN_ROTATION_STRENGTH = 0.02;  // Radians per tick of random spin (~23°/s random walk)
 
 
 // ─── Tank Constants ─────────────────────────────────────────

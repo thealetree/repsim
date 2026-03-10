@@ -955,7 +955,11 @@ export async function createRenderer(width: number, height: number): Promise<Ren
           sprite.y = seg.y[idx] + orgParallaxY;
 
           // ── Compute pill rotation (tree-aware) ──
-          let angle = 0;
+          // When segments overlap (distance² < 0.01), keep the sprite's
+          // previous rotation instead of defaulting to 0 (horizontal).
+          // This prevents large segments from snapping to horizontal
+          // during crowding when constraints haven't fully resolved.
+          let angle = sprite.rotation; // Default: keep previous rotation
 
           if (topology.isLeaf[i]) {
             if (i > 0) {
