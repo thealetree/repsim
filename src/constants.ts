@@ -206,7 +206,7 @@ export const CHAIN_CONSTRAINT_ITERATIONS = 3;   // How many times to enforce cha
 export const SEGMENT_CHAIN_DISTANCE = SEGMENT_RADIUS * 1.6; // Target distance between connected segments (tighter for branch overlap)
 export const COLLISION_PUSH_STRENGTH = 0.8;     // How hard segments push apart on overlap
 export const ANGULAR_CONSTRAINT_STIFFNESS = 0.7; // How strongly organisms hold their genetic shape (per iteration, was 0.5)
-export const BROWNIAN_ROTATION_STRENGTH = 0.04;  // Radians per tick of random spin for non-yellow organisms
+export const BROWNIAN_ROTATION_STRENGTH = 0.015;  // Radians per tick of random spin (~17°/s random walk)
 
 
 // ─── Tank Constants ─────────────────────────────────────────

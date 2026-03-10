@@ -55,9 +55,11 @@ import { _orgDepthLayer } from './behaviors';
 
 const spatialHash = createSpatialHash();
 
-// Module-level scratch buffer for angular constraints.
+// Module-level scratch buffers for angular constraints.
 // Reused every frame to avoid garbage collection. MAX_SEGMENTS = 15.
 const _incomingAngle = new Float64Array(MAX_SEGMENTS);
+const _restX = new Float64Array(MAX_SEGMENTS);
+const _restY = new Float64Array(MAX_SEGMENTS);
 
 
 // ─── Fast Numeric Tank Cell Lookup ──────────────────────────
@@ -236,22 +238,13 @@ export function enforceChainConstraints(world: World): void {
 /**
  * Angular Constraints — Make organisms hold their genetic shape
  *
- * HYBRID APPROACH: Combines genome-based global shape restoration with
- * rotation-based corrections that preserve chain distances.
- *
- * Step 1: Compute DESIRED angles by propagating genome angles from the
- *         organism's current orientation (effectiveBase). This gives the
- *         globally-correct direction for every segment, exactly like the
- *         original rest-position approach.
- *
- * Step 2: For each segment, compute the error between its desired direction
- *         and its actual current direction, then ROTATE it around its parent
- *         by (error × stiffness). Unlike linear blending toward rest positions,
- *         rotation preserves the current chain distance — no fighting between
- *         angular and chain constraints, which eliminates tight-angle spinning.
+ * TREE-AWARE: Computes the "rest shape" by walking the tree in topological
+ * order (index order), building rest positions from the genome's parent
+ * references and turn angles. Each segment is blended toward its rest position.
  *
  * The organism's current orientation comes from the root→first-child direction.
- * Organisms can freely rotate as a whole, but internal angles are maintained.
+ * This means organisms can freely rotate as a whole, but internal angles
+ * are rigidly maintained — including branch angles.
  *
  * CRITICAL: Both pos and prevPos are adjusted by the same delta.
  * This prevents the angular constraint from injecting rotational velocity.
@@ -279,60 +272,34 @@ export function enforceAngularConstraints(world: World): void {
     const refDy = seg.y[firstChildGlobal] - seg.y[root];
     const baseAngle = Math.atan2(refDy, refDx);
 
-    // The reference angle is the actual root→firstChild direction.
-    // The genome says firstChild's angle offset is genome[firstChildGeneIdx].angle.
-    // So the "effective base" that makes firstChild land correctly is:
-    //   effectiveBase + genome[firstChildGeneIdx].angle = baseAngle
-    //   effectiveBase = baseAngle - genome[firstChildGeneIdx].angle
     const effectiveBase = baseAngle - org.genome[firstChildGeneIdx].angle;
 
-    // Step 1: Compute DESIRED angles from genome propagation.
-    // These represent the globally-correct direction for each segment,
-    // anchored to the organism's current orientation (effectiveBase).
+    // Compute rest positions in topological order using scratch buffers
     _incomingAngle[0] = effectiveBase;
+    _restX[0] = seg.x[root];
+    _restY[0] = seg.y[root];
+
     for (let i = 1; i < org.segmentCount; i++) {
       const geneParent = org.genome[i].parent;
-      _incomingAngle[i] = _incomingAngle[geneParent] + org.genome[i].angle;
+      const outAngle = _incomingAngle[geneParent] + org.genome[i].angle;
+      _incomingAngle[i] = outAngle;
+
+      const parentLen = org.genome[geneParent].length || 1;
+      const childLen = org.genome[i].length || 1;
+      const chainDist = SEGMENT_CHAIN_DISTANCE * Math.sqrt((parentLen + childLen) / 2);
+      _restX[i] = _restX[geneParent] + Math.cos(outAngle) * chainDist;
+      _restY[i] = _restY[geneParent] + Math.sin(outAngle) * chainDist;
     }
 
-    // Step 2: Rotate each non-reference segment toward its desired direction.
-    // Rotation around parent preserves current chain distance — no fighting
-    // with chain constraints, eliminating tight-angle oscillation/spinning.
+    // Apply corrections for all segments except root and the reference child
     for (let i = 1; i < org.segmentCount; i++) {
       if (i === firstChildGeneIdx) continue; // reference child — skip
 
       const idx = root + i;
       if (!seg.alive[idx]) continue;
 
-      const parentGeneIdx = org.genome[i].parent;
-      const parentGlobal = root + parentGeneIdx;
-
-      // Desired direction from genome propagation
-      const desiredAngle = _incomingAngle[i];
-
-      // Actual current direction from parent to this segment
-      const dx = seg.x[idx] - seg.x[parentGlobal];
-      const dy = seg.y[idx] - seg.y[parentGlobal];
-      const currentAngle = Math.atan2(dy, dx);
-
-      // Angle error normalized to [-π, π].
-      // MUST use atan2(sin,cos) because genome-propagated angles can accumulate
-      // far beyond ±π (e.g. a chain of +90° turns → 10π+). A simple if/else
-      // only handles errors near ±2π and would create catastrophic corrections.
-      const rawError = desiredAngle - currentAngle;
-      const angleError = Math.atan2(Math.sin(rawError), Math.cos(rawError));
-
-      const delta = angleError * stiffness;
-
-      // Rotate the (dx, dy) vector around parent by delta.
-      // This preserves the current distance — no chain constraint fighting!
-      const cosD = Math.cos(delta);
-      const sinD = Math.sin(delta);
-      const newDx = dx * cosD - dy * sinD;
-      const newDy = dx * sinD + dy * cosD;
-
-      const corrX = (seg.x[parentGlobal] + newDx) - seg.x[idx];
-      const corrY = (seg.y[parentGlobal] + newDy) - seg.y[idx];
+      const corrX = (_restX[i] - seg.x[idx]) * stiffness;
+      const corrY = (_restY[i] - seg.y[idx]) * stiffness;
 
       // Apply to BOTH pos and prevPos — no velocity injection!
       seg.x[idx] += corrX;
