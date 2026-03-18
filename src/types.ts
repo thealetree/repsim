@@ -252,6 +252,13 @@ export interface Organism {
   // ID of the organism whose red attack killed this organism (-1 = natural death).
   // Set during runRedAttack, read by removeOrganism to transfer energy.
   killedByOrgId: number;
+
+  // Smoothed orientation angle (radians) — the organism's heading derived from the
+  // previous tick's first-child direction. Updated AFTER angular corrections each tick
+  // so it reflects post-correction state. Using last-tick angle (not live) prevents the
+  // first-child's jitter from instantly snapping all downstream segments.
+  orientationAngle: number;
+  angularVelocity: number;   // Radians/tick — decays via damping, injected by wall bounces/collisions/Brownian
 }
 
 

@@ -1118,3 +1118,57 @@ export function autoRestore(engine: SimulationEngine): boolean {
 export function clearAutoSave(): void {
   sessionStorage.removeItem(AUTOSAVE_KEY);
 }
+
+/** Store an organism's genome in localStorage for the Inspector to load on navigation.
+ *  Synchronous — safe to call directly in a click handler so window.open stays
+ *  within the user-gesture boundary (async .then() would cause popup-blocker blocks). */
+export function saveOrganismToInspectorSync(genome: Gene[], generation: number, name: string): void {
+  const payload = serializeOrganism(genome, generation, name);
+  localStorage.setItem('repsim:inspector-context', JSON.stringify({ payload, fromSim: true }));
+}
+
+/** @deprecated Async version kept for compatibility — prefer saveOrganismToInspectorSync */
+export async function saveOrganismToInspector(genome: Gene[], generation: number, name: string): Promise<void> {
+  const payload = serializeOrganism(genome, generation, name);
+  const encoded = await compress(JSON.stringify(payload));
+  localStorage.setItem('repsim:inspector-context', JSON.stringify({ encoded, fromSim: true }));
+}
+
+/** Read and deserialize the inspector export from localStorage (called by sim on return). */
+export async function loadOrganismFromInspector(): Promise<{ genome: Gene[]; generation: number; name: string } | null> {
+  const raw = localStorage.getItem('repsim:inspector-export');
+  if (!raw) return null;
+  localStorage.removeItem('repsim:inspector-export');
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+
+    // Direct (uncompressed) format written by inspector-ui.ts return button: { v, g, gen, n }
+    if (parsed.v === 1 && Array.isArray(parsed.g) && (parsed.g as unknown[]).length > 0) {
+      return { genome: parsed.g as Gene[], generation: (parsed.gen as number) ?? 0, name: (parsed.n as string) ?? 'Unknown' };
+    }
+
+    // Compressed format: { encoded: '...' }
+    if (typeof parsed.encoded === 'string') {
+      const encoded = parsed.encoded;
+      const json = await (async () => {
+        const buf = (() => {
+          let b64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+          while (b64.length % 4) b64 += '=';
+          const binary = atob(b64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          return bytes;
+        })();
+        const stream = new Blob([buf.buffer as ArrayBuffer]).stream().pipeThrough(new DecompressionStream('deflate'));
+        return await new Response(stream).text();
+      })();
+      const payload = JSON.parse(json) as OrganismPayload;
+      if (payload.v === 1 && Array.isArray(payload.g) && payload.g.length > 0) {
+        return { genome: payload.g as Gene[], generation: payload.gen ?? 0, name: payload.n ?? 'Unknown' };
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to load inspector export:', err);
+  }
+  return null;
+}

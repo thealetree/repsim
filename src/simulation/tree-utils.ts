@@ -14,7 +14,7 @@
  */
 
 import type { Genome, GenomeTopology } from '../types';
-import { SEGMENT_CHAIN_DISTANCE } from '../constants';
+import { SEGMENT_CHAIN_BASE } from '../constants';
 
 
 /**
@@ -59,7 +59,7 @@ export function buildGenomeTopology(genome: Genome): GenomeTopology {
     sinCumAngle[i] = Math.sin(cumulativeAngle[i]);
     const pLen = genome[p].length || 1;
     const cLen = genome[i].length || 1;
-    chainDist[i] = SEGMENT_CHAIN_DISTANCE * Math.sqrt((pLen + cLen) / 2);
+    chainDist[i] = SEGMENT_CHAIN_BASE * (pLen + cLen);
   }
 
   return { children, childCount, isLeaf, depth, cosCumAngle, sinCumAngle, chainDist };

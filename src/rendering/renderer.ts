@@ -907,14 +907,19 @@ export async function createRenderer(width: number, height: number): Promise<Ren
       for (const org of world.organisms.values()) {
         if (!org.alive) continue;
 
-        const topology = org.topology;
-
         // Per-organism parallax: use ROOT segment depth so all segments
         // in the organism shift together (no tearing from depth variation).
         const rootDepth = seg.segmentDepth[org.firstSegment];
         const orgPFactor = 0.5 - rootDepth; // centered on depth 0.5: deep → +, shallow → −
         const orgParallaxX = parallaxCamX * orgPFactor;
         const orgParallaxY = parallaxCamY * orgPFactor;
+
+        // Per-organism rotation basis: genome cumulative angle must match enforceAngularConstraints.
+        // atan2(self−parent) is a blend of parent+child genome directions with cap-focus placement,
+        // so pills would drift as parents rotate.  Use topology instead.
+        const orgTopology = org.topology;
+        const cosOri = Math.cos(org.orientationAngle);
+        const sinOri = Math.sin(org.orientationAngle);
 
         for (let i = 0; i < org.segmentCount; i++) {
           const idx = org.firstSegment + i;
@@ -940,6 +945,7 @@ export async function createRenderer(width: number, height: number): Promise<Ren
           let sprite: Sprite;
           if (layer.active < layer.sprites.length) {
             sprite = layer.sprites[layer.active];
+            sprite.rotation = 0;  // Reset stale rotation — pool sprites may have been used by a different organism
             sprite.visible = true;
           } else {
             sprite = new Sprite();
@@ -972,36 +978,12 @@ export async function createRenderer(width: number, height: number): Promise<Ren
           sprite.x = seg.x[idx] + orgParallaxX;
           sprite.y = seg.y[idx] + orgParallaxY;
 
-          // ── Compute pill rotation (tree-aware) ──
-          // When segments overlap (distance² < 0.01), keep the sprite's
-          // previous rotation instead of defaulting to 0 (horizontal).
-          // This prevents large segments from snapping to horizontal
-          // during crowding when constraints haven't fully resolved.
-          let angle = sprite.rotation; // Default: keep previous rotation
-
-          if (topology.isLeaf[i]) {
-            if (i > 0) {
-              const parentGlobal = idx + seg.parentOffset[idx];
-              if (seg.alive[parentGlobal]) {
-                const dx = seg.x[idx] - seg.x[parentGlobal];
-                const dy = seg.y[idx] - seg.y[parentGlobal];
-                if (dx * dx + dy * dy > 0.01) {
-                  angle = Math.atan2(dy, dx);
-                }
-              }
-            }
-          } else {
-            const firstChildGeneIdx = topology.children[i][0];
-            const childGlobal = org.firstSegment + firstChildGeneIdx;
-            if (seg.alive[childGlobal]) {
-              const dx = seg.x[childGlobal] - seg.x[idx];
-              const dy = seg.y[childGlobal] - seg.y[idx];
-              if (dx * dx + dy * dy > 0.01) {
-                angle = Math.atan2(dy, dx);
-              }
-            }
-          }
-          sprite.rotation = angle;
+          // ── Compute pill rotation from genome cumulative angle ──
+          // Must match enforceAngularConstraints: cap-focus placement uses cosOri*cosCum−sinOri*sinCum.
+          // atan2(self−parent) gives a blended direction and drifts as parents rotate.
+          const cosA = cosOri * orgTopology.cosCumAngle[i] - sinOri * orgTopology.sinCumAngle[i];
+          const sinA = sinOri * orgTopology.cosCumAngle[i] + cosOri * orgTopology.sinCumAngle[i];
+          sprite.rotation = Math.atan2(sinA, cosA);
 
           const rootBonus = seg.isRoot[idx] ? 1.15 : 1.0;
           const birthScale = effects.getBirthScale(org.id, now);

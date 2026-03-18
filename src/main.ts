@@ -20,11 +20,12 @@ import { createRenderer } from './rendering/renderer';
 import { createUI } from './ui/ui';
 import { createTooltipSystem, injectTooltipStyles } from './ui/tooltips';
 import { createChartSystem, injectChartStyles } from './ui/charts';
-import { parseUrlParams, injectSaveShareStyles, autoSave, autoRestore } from './ui/save-share';
+import { parseUrlParams, injectSaveShareStyles, autoSave, autoRestore, loadOrganismFromInspector } from './ui/save-share';
 import { createTutorialSystem, createTutorialButton, autoStartTutorial, injectTutorialStyles } from './ui/tutorial';
 import { createEnvironmentPanel, injectEnvironmentPanelStyles } from './ui/environment-panel';
 import { setupMobileLayout } from './ui/mobile-layout';
-import { DEFAULT_CONFIG } from './constants';
+import { DEFAULT_CONFIG, TANK_HALF_WIDTH, TANK_HALF_HEIGHT } from './constants';
+import { spawnOrganismFromGenome } from './simulation/world';
 
 /**
  * Main initialization — async because PixiJS init is async.
@@ -70,6 +71,22 @@ async function main(): Promise<void> {
   if (!urlHasParams) {
     const restored = autoRestore(engine);
     if (restored) console.log('🧬 Restored autosave');
+  }
+
+  // ── 8a2. Inspector export — spawn edited rep returned from Inspector ──
+  const inspectorOrg = await loadOrganismFromInspector();
+  if (inspectorOrg) {
+    const px = (Math.random() * 2 - 1) * TANK_HALF_WIDTH * 0.6;
+    const py = (Math.random() * 2 - 1) * TANK_HALF_HEIGHT * 0.6;
+    spawnOrganismFromGenome(engine.world, inspectorOrg.genome, px, py, engine.config, inspectorOrg.generation, 0);
+    console.log(`🔬 Rep returned from Inspector: "${inspectorOrg.name}"`);
+    // Brief toast
+    const toast = document.createElement('div');
+    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(20,20,40,0.92);color:#a0c4ff;border:1px solid rgba(100,150,255,0.3);border-radius:8px;padding:8px 18px;font-family:Inter,sans-serif;font-size:13px;z-index:9999;pointer-events:none;opacity:0;transition:opacity 0.3s;';
+    toast.textContent = `🔬 Rep "${inspectorOrg.name}" returned from Inspector`;
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => { toast.style.opacity = '1'; });
+    setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 350); }, 2500);
   }
 
   // ── 8b. Bottom Environment Panel ──

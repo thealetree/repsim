@@ -97,7 +97,7 @@ export const MAX_SEGMENTS = 15;                 // Maximum segments per organism
 // With chain distance 2.2r and ±45° turns, the tightest possible
 // circle has radius ~23 units with ~18 unit spacing between segments,
 // comfortably above the 16-unit collision diameter.
-export const MAX_GENE_TURN_ANGLE = Math.PI * 0.6; // ±108° — allows wide radial angles for green/blue hubs
+export const MAX_GENE_TURN_ANGLE = Math.PI / 4; // ±45° — outward-facing cone per segment end; prevents fold-backs and segment overlaps
 export const TIMED_DEATH_MIN_TICKS = 2000;      // ~100 seconds at 20 tps (V1: 100s)
 export const TIMED_DEATH_MAX_TICKS = 4000;      // ~200 seconds at 20 tps (V1: 200s)
 
@@ -136,12 +136,12 @@ export const PREFERRED_ANGLE_JITTER = Math.PI / 12;            // ±15° wobble
 
 // Preferred angles per color (radians).
 export const COLOR_PREFERRED_ANGLES: Record<number, number[]> = {
-  0: [-Math.PI / 3, 0, Math.PI / 3, -2 * Math.PI / 3, 2 * Math.PI / 3], // Green: 5-way canopy (-120°,-60°,0°,+60°,+120°)
-  1: [-Math.PI / 2, 0, Math.PI / 2, Math.PI],                             // Blue: 4-way cross (-90°,0°,+90°,180°)
-  2: [-Math.PI / 8, 0, Math.PI / 8],                                      // Yellow: nearly straight (±22.5°)
-  3: [-Math.PI / 2, Math.PI / 2],                                         // Red: ±90° perpendicular thorns
-  4: [0],                                                                   // Black: straight only
-  5: [-Math.PI / 4, 0, Math.PI / 4],                                        // White: ±45° sweep (scavenging reach)
+  0: [-Math.PI / 6, 0, Math.PI / 6],          // Green: ±30° canopy fan
+  1: [-Math.PI / 6, 0, Math.PI / 6],          // Blue: ±30° spread
+  2: [-Math.PI / 8, 0, Math.PI / 8],          // Yellow: ±22.5° nearly straight (unchanged)
+  3: [-Math.PI / 4, Math.PI / 4],             // Red: ±45° max thorn spread
+  4: [0],                                       // Black: straight only (unchanged)
+  5: [-Math.PI / 4, 0, Math.PI / 4],          // White: ±45° scavenging reach
 };
 
 // ─── Variable Segment Length ────────────────────────────────
@@ -203,10 +203,9 @@ export const SIM_TICKS_PER_SECOND = 20;         // Fixed simulation rate
 export const SIM_DT = 1 / SIM_TICKS_PER_SECOND; // Time step in seconds (0.05)
 export const VERLET_DAMPING = 0.98;             // Velocity damping per tick (0-1)
 export const CHAIN_CONSTRAINT_ITERATIONS = 3;   // How many times to enforce chain constraints
-export const SEGMENT_CHAIN_DISTANCE = SEGMENT_RADIUS * 1.6; // Target distance between connected segments (tighter for branch overlap)
-export const COLLISION_PUSH_STRENGTH = 0.8;     // How hard segments push apart on overlap
-export const ANGULAR_CONSTRAINT_STIFFNESS = 0.7; // How strongly organisms hold their genetic shape (per iteration, was 0.5)
-export const BROWNIAN_ROTATION_STRENGTH = 0.02;  // Radians per tick of random spin (~23°/s random walk)
+export const COLLISION_PUSH_STRENGTH = 0.2;     // How hard segments push apart on overlap (reduced: impulses now accumulate at root instead of spreading across segments)
+export const ANGULAR_CONSTRAINT_STIFFNESS = 0.48; // Scaled inversely with chain distance to maintain same rigidity as old 0.7×12.8 system
+export const BROWNIAN_ROTATION_STRENGTH = 0.06;  // Radians per tick of random spin (increased from 0.02 — rigid snap removed natural rotation from joint flex)
 
 
 // ─── Tank Constants ─────────────────────────────────────────
@@ -275,9 +274,10 @@ export const CAMERA_ZOOM_SPEED = 0.1;
 
 export const SEGMENT_PILL_LENGTH = SEGMENT_RADIUS * 3.0;  // Long axis of capsule
 export const SEGMENT_PILL_WIDTH = SEGMENT_RADIUS * 1.5;   // Short axis of capsule
-// With chain distance 1.6r, sqrt-compressed length factor, and pill length 3.0r,
-// pills overlap generously at joints — including at branch points where only
-// the parent's width faces the child. Long segments get a 35% width boost.
+
+export const CHAIN_JOIN_FACTOR = 0.78;                      // Must match DEPTH_SCALE_MIN — at min depth scale, pills exactly touch at tips (no gap at any blur level)
+export const SEGMENT_CHAIN_BASE = SEGMENT_PILL_LENGTH * 0.5 * CHAIN_JOIN_FACTOR; // 9.36 — per-unit contribution per gene length unit
+export const SEGMENT_CHAIN_DISTANCE = SEGMENT_CHAIN_BASE * 2; // 18.72 — backward-compat value for default (1,1) segments
 
 
 // ─── 2.5D Blur Layers (Depth Effect) ────────────────────────

@@ -125,6 +125,7 @@ export function runBehaviors(world: World, config: SimConfig): void {
   runScavenging(world, config);     // Segments eat food particles (white orgs: any seg)
   runVirusSystem(world, config, attackSpatialHash, foodSpatialHash, _orgDepthLayer); // Virus spread, effects, immunity
   runSegmentDepthPropagation(world); // Wave per-segment depth from root → leaves
+  killOrphanedSegments(world);       // Kill segments whose parent died (before health checks)
   runHealthChecks(world);
   runTimedDeath(world);
   const foodDecayTicks = Math.round(config.foodDecaySeconds * SIM_TICKS_PER_SECOND);
@@ -398,10 +399,10 @@ function runYellowMovement(world: World, config: SimConfig): void {
       const ny = dirY / len;
       const thrust = YELLOW_THRUST_STRENGTH * lengthMult;
 
-      // Inject velocity by shifting prevPos BACKWARDS from thrust direction
-      // This creates forward velocity on next verlet integration
-      seg.prevX[idx] -= nx * thrust;
-      seg.prevY[idx] -= ny * thrust;
+      // Inject velocity into ROOT — organisms are rigid bodies, so thrust anywhere
+      // drives the whole body. Applying to root ensures the rigid snap doesn't eat it.
+      seg.prevX[org.firstSegment] -= nx * thrust;
+      seg.prevY[org.firstSegment] -= ny * thrust;
 
       // Depth impulse from Y-component of thrust direction
       // Swimming down (ny > 0) → dive deeper (depth decreases toward 0 = blurry)
@@ -611,6 +612,29 @@ function runScavenging(world: World, config: SimConfig): void {
 
 
 // ─── 6. Health Checks ───────────────────────────────────────
+
+/**
+ * Kill any segment whose parent segment is dead but the segment itself is still alive.
+ * Genome genes are topologically sorted (parent index < child index), so a single forward
+ * pass is sufficient: killing a segment here orphans its children in the same pass,
+ * and they are caught in subsequent loop iterations.
+ */
+function killOrphanedSegments(world: World): void {
+  const seg = world.segments;
+  for (const org of world.organisms.values()) {
+    if (!org.alive) continue;
+    const root = org.firstSegment;
+    for (let i = 1; i < org.segmentCount; i++) { // i=0 is root — has no parent
+      const idx = root + i;
+      if (!seg.alive[idx]) continue;
+      const parentGlobal = root + org.genome[i].parent;
+      if (!seg.alive[parentGlobal]) {
+        killBranch(world, org, i); // Proper cleanup: food drop, animations, stat updates
+      }
+    }
+  }
+}
+
 /**
  * Check for segment and organism death conditions.
  *

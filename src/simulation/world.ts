@@ -33,6 +33,7 @@ import {
   TIMED_DEATH_MIN_TICKS,
   TIMED_DEATH_MAX_TICKS,
   SEGMENT_CHAIN_DISTANCE,
+  SEGMENT_CHAIN_BASE,
   SEGMENT_RADIUS,
   MAX_GENE_TURN_ANGLE,
   BLUR_LAYER_COUNT,
@@ -358,7 +359,7 @@ export function isGenomeSelfIntersecting(genome: Genome): boolean {
     const angle = incomingAngle[p] + genome[i].angle;
     incomingAngle[i] = angle;
     const parentLength = genome[p].length;
-    const chainDist = SEGMENT_CHAIN_DISTANCE * Math.sqrt((parentLength + genome[i].length) / 2);
+    const chainDist = SEGMENT_CHAIN_BASE * (parentLength + genome[i].length);
     xs[i] = xs[p] + Math.cos(angle) * chainDist;
     ys[i] = ys[p] + Math.sin(angle) * chainDist;
   }
@@ -577,6 +578,8 @@ export function spawnOrganismFromGenome(
     topology,
     fingerprint,
     killedByOrgId: -1,
+    orientationAngle: 0, // updated each tick by angular constraint (first tick sets it from first-child position)
+    angularVelocity: 0,
   };
 
   // ─── Place segments in a TREE ───
@@ -619,7 +622,7 @@ export function spawnOrganismFromGenome(
     // Sqrt compression prevents huge gaps at branch points where only the parent's
     // narrow pill width (not length) faces the branch child.
     const parentLength = genome[parentGeneIdx].length;
-    const chainDist = SEGMENT_CHAIN_DISTANCE * Math.sqrt((parentLength + gene.length) / 2);
+    const chainDist = SEGMENT_CHAIN_BASE * (parentLength + gene.length);
 
     // Compute outgoing angle: parent's incoming angle + this gene's turn angle
     const outAngle = incomingAngle[parentGeneIdx] + gene.angle;
@@ -649,6 +652,15 @@ export function spawnOrganismFromGenome(
 
     // Store rest length for physics constraints
     seg.restLength[myGlobalIdx] = chainDist;
+  }
+
+  // Initialize orientationAngle from first child's actual placed position (if genome has >1 gene)
+  if (genome.length > 1 && topology.children[0].length > 0) {
+    const firstChildGeneIdx = topology.children[0][0];
+    const firstChildGlobal = firstSegment + firstChildGeneIdx;
+    const dx = seg.x[firstChildGlobal] - seg.x[firstSegment];
+    const dy = seg.y[firstChildGlobal] - seg.y[firstSegment];
+    organism.orientationAngle = Math.atan2(dy, dx);
   }
 
   // Register the organism in the world

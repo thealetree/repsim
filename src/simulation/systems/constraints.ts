@@ -34,15 +34,13 @@ import { VirusEffect } from '../../types';
 import {
   VERLET_DAMPING,
   SEGMENT_CHAIN_DISTANCE,
-  CHAIN_CONSTRAINT_ITERATIONS,
   SEGMENT_RADIUS,
+  SEGMENT_PILL_LENGTH,
+  SEGMENT_PILL_WIDTH,
   TANK_GRID_SPACING,
   COLLISION_PUSH_STRENGTH,
-  ANGULAR_CONSTRAINT_STIFFNESS,
-  MAX_SEGMENTS,
   VIRUS_JOINT_WOBBLE,
   PARALLAX_BOUNDARY_MARGIN,
-  BROWNIAN_ROTATION_STRENGTH,
 } from '../../constants';
 import {
   createSpatialHash,
@@ -55,10 +53,6 @@ import { _orgDepthLayer } from './behaviors';
 
 const spatialHash = createSpatialHash();
 
-// Module-level scratch buffers for angular constraints.
-// Reused every frame to avoid garbage collection. MAX_SEGMENTS = 15.
-const _restX = new Float64Array(MAX_SEGMENTS);
-const _restY = new Float64Array(MAX_SEGMENTS);
 
 
 // ─── Fast Numeric Tank Cell Lookup ──────────────────────────
@@ -239,77 +233,93 @@ export function enforceChainConstraints(world: World): void {
 
 
 /**
- * Angular Constraints — Make organisms hold their genetic shape
+ * Rigid Body Snap — Place all non-root segments at their exact rest positions.
  *
- * TREE-AWARE: Computes the "rest shape" by walking the tree in topological
- * order (index order), building rest positions from the genome's parent
- * references and turn angles. Each segment is blended toward its rest position.
+ * Organisms are treated as rigid bodies: the genome defines a fixed shape,
+ * and all segments are hard-set to that shape relative to the root every tick.
+ * This eliminates all spring-based angular tension and oscillation — angles
+ * are pure geometry, not physics forces.
  *
- * The organism's current orientation comes from the root→first-child direction.
- * This means organisms can freely rotate as a whole, but internal angles
- * are rigidly maintained — including branch angles.
+ * Non-root segments inherit the root's velocity (prevPos = pos - rootVelocity)
+ * so they drift with the root rather than oscillating relative to it.
  *
- * CRITICAL: Both pos and prevPos are adjusted by the same delta.
- * This prevents the angular constraint from injecting rotational velocity.
+ * Orientation (orientationAngle) is the only rotational degree of freedom.
+ * It is updated from the first child's post-snap direction each tick.
+ * Brownian rotation nudges it directly; yellow thrust drives translation of root.
  */
 export function enforceAngularConstraints(world: World): void {
   const seg = world.segments;
-  const stiffness = ANGULAR_CONSTRAINT_STIFFNESS;
 
   for (const org of world.organisms.values()) {
-    if (!org.alive || org.segmentCount < 3) continue;
+    if (!org.alive || org.segmentCount < 2) continue;
 
     const root = org.firstSegment;
     const topology = org.topology;
 
-    // We need at least one child of root to compute orientation
     if (topology.children[0].length === 0) continue;
 
-    // Organism orientation = direction from root to its first child
     const firstChildGeneIdx = topology.children[0][0];
     const firstChildGlobal = root + firstChildGeneIdx;
 
     if (!seg.alive[root] || !seg.alive[firstChildGlobal]) continue;
 
-    const refDx = seg.x[firstChildGlobal] - seg.x[root];
-    const refDy = seg.y[firstChildGlobal] - seg.y[root];
-    const baseAngle = Math.atan2(refDy, refDx);
-
-    const effectiveBase = baseAngle - org.genome[firstChildGeneIdx].angle;
-
-    // Only 2 trig calls per organism (not per segment!) using angle-addition identity:
-    // cos(base + cumAngle[i]) = cosBase*cosCum[i] - sinBase*sinCum[i]
-    // sin(base + cumAngle[i]) = sinBase*cosCum[i] + cosBase*sinCum[i]
+    // effectiveBase = orientationAngle directly so every genome[i].angle contributes
+    // to its segment's world position without the firstChild angle cancelling itself out.
+    const effectiveBase = org.orientationAngle;
     const cosBase = Math.cos(effectiveBase);
     const sinBase = Math.sin(effectiveBase);
 
-    _restX[0] = seg.x[root];
-    _restY[0] = seg.y[root];
+    // Root's current velocity — all non-root segments inherit this so the
+    // whole body drifts together with zero relative motion between segments.
+    const rootVx = seg.x[root] - seg.prevX[root];
+    const rootVy = seg.y[root] - seg.prevY[root];
 
+    // Hard-set each segment to its exact rest position (topological order:
+    // parent is already placed when child is processed).
     for (let i = 1; i < org.segmentCount; i++) {
-      const geneParent = org.genome[i].parent;
-      const cosAngle = cosBase * topology.cosCumAngle[i] - sinBase * topology.sinCumAngle[i];
-      const sinAngle = sinBase * topology.cosCumAngle[i] + cosBase * topology.sinCumAngle[i];
-      _restX[i] = _restX[geneParent] + cosAngle * topology.chainDist[i];
-      _restY[i] = _restY[geneParent] + sinAngle * topology.chainDist[i];
-    }
-
-    // Apply corrections for all segments except root and the reference child
-    for (let i = 1; i < org.segmentCount; i++) {
-      if (i === firstChildGeneIdx) continue; // reference child — skip
-
       const idx = root + i;
       if (!seg.alive[idx]) continue;
 
-      const corrX = (_restX[i] - seg.x[idx]) * stiffness;
-      const corrY = (_restY[i] - seg.y[idx]) * stiffness;
+      const geneParent = org.genome[i].parent;
+      const parentIdx = root + geneParent;
 
-      // Apply to BOTH pos and prevPos — no velocity injection!
-      seg.x[idx] += corrX;
-      seg.y[idx] += corrY;
-      seg.prevX[idx] += corrX;
-      seg.prevY[idx] += corrY;
+      if (!seg.alive[parentIdx]) continue; // Orphan guard: parent dead → skip (behaviors.ts will kill this segment)
+
+      const cosAngle = cosBase * topology.cosCumAngle[i] - sinBase * topology.sinCumAngle[i];
+      const sinAngle = sinBase * topology.cosCumAngle[i] + cosBase * topology.sinCumAngle[i];
+
+      // Cap-focus snap: child's back cap focus meets the parent's front cap focus.
+      //
+      // Pills are rendered with non-uniform scaling: length scales at 1× per lengthMult,
+      // width scales at 0.35× per extra lengthMult (widthMult = 1 + (len-1)*0.35).
+      // The cap radius in world space = (SEGMENT_PILL_WIDTH/2) * widthMult.
+      // The cap focus (center of the arc) from segment center = (SEGMENT_PILL_LENGTH/2)*len - (SEGMENT_PILL_WIDTH/2)*widthMult.
+      const cosParentAngle = cosBase * topology.cosCumAngle[geneParent] - sinBase * topology.sinCumAngle[geneParent];
+      const sinParentAngle = sinBase * topology.cosCumAngle[geneParent] + cosBase * topology.sinCumAngle[geneParent];
+      const parentLen = org.genome[geneParent].length;
+      const childLen  = org.genome[i].length;
+      const parentWidthMult = 1 + (parentLen - 1) * 0.35;
+      const childWidthMult  = 1 + (childLen  - 1) * 0.35;
+      const HALF_LEN = SEGMENT_PILL_LENGTH * 0.5;
+      const HALF_WID = SEGMENT_PILL_WIDTH  * 0.5;
+      const parentCapFocus = HALF_LEN * parentLen - HALF_WID * parentWidthMult;
+      const childCapFocus  = HALF_LEN * childLen  - HALF_WID * childWidthMult;
+      const restX = seg.x[parentIdx]
+        + cosParentAngle * parentCapFocus
+        + cosAngle       * childCapFocus;
+      const restY = seg.y[parentIdx]
+        + sinParentAngle * parentCapFocus
+        + sinAngle       * childCapFocus;
+
+      // Teleport to rest position; set prevPos so velocity = root velocity.
+      // This makes segments move with the root instead of oscillating relative to it.
+      seg.x[idx] = restX;
+      seg.y[idx] = restY;
+      seg.prevX[idx] = restX - rootVx;
+      seg.prevY[idx] = restY - rootVy;
     }
+
+    // orientationAngle is updated only by Brownian + velocity steering — no readback needed.
   }
 }
 
@@ -362,17 +372,13 @@ export function resolveCollisions(world: World): void {
 
       const sameOrganism = seg.organismId[i] === seg.organismId[j];
 
-      if (sameOrganism) {
-        // Same organism: skip parent-child pairs (they're connected by chain constraint)
-        const parentOfI = i + seg.parentOffset[i];
-        const parentOfJ = j + seg.parentOffset[j];
-        if (parentOfI === j || parentOfJ === i) continue;
-      } else {
-        // Different organisms: only collide if they're on the SAME depth layer
-        const layerI = _orgDepthLayer.get(seg.organismId[i]);
-        const layerJ = _orgDepthLayer.get(seg.organismId[j]);
-        if (layerI !== layerJ) continue;
-      }
+      // Intra-organism: rigid snap handles all internal geometry — no collision needed.
+      if (sameOrganism) continue;
+
+      // Different organisms: only collide if they're on the SAME depth layer
+      const layerI = _orgDepthLayer.get(seg.organismId[i]);
+      const layerJ = _orgDepthLayer.get(seg.organismId[j]);
+      if (layerI !== layerJ) continue;
 
       const dx = seg.x[j] - seg.x[i];
       const dy = seg.y[j] - seg.y[i];
@@ -384,46 +390,27 @@ export function resolveCollisions(world: World): void {
         const pushX = dx * overlap * COLLISION_PUSH_STRENGTH;
         const pushY = dy * overlap * COLLISION_PUSH_STRENGTH;
 
-        if (sameOrganism) {
-          // INTRA-organism: pure position correction (no velocity injection).
-          // Adjust BOTH pos and prevPos to avoid phantom internal movement.
-          seg.x[i] -= pushX;
-          seg.y[i] -= pushY;
-          seg.prevX[i] -= pushX;
-          seg.prevY[i] -= pushY;
+        // INTER-organism: Redirect impulses to roots.
+        // The rigid snap erases any impulse applied to a non-root segment on the
+        // same tick. Applying the push to roots means the whole organism bounces.
+        const rI = world.organisms.get(seg.organismId[i])!.firstSegment;
+        const rJ = world.organisms.get(seg.organismId[j])!.firstSegment;
 
-          seg.x[j] += pushX;
-          seg.y[j] += pushY;
-          seg.prevX[j] += pushX;
-          seg.prevY[j] += pushY;
-        } else {
-          // INTER-organism: VELOCITY INJECTION.
-          // Only move pos — prevPos stays, creating velocity = (pos - prevPos).
-          // This velocity is picked up by verlet integration next frame,
-          // and chain constraints propagate it to ALL segments of the organism.
-          // Result: whole organism pushes away from the collision, not just
-          // the individual colliding segment.
-          seg.x[i] -= pushX;
-          seg.y[i] -= pushY;
+        seg.x[rI] -= pushX;
+        seg.y[rI] -= pushY;
+        seg.x[rJ] += pushX;
+        seg.y[rJ] += pushY;
 
-          seg.x[j] += pushX;
-          seg.y[j] += pushY;
+        // Tangential velocity kicks to add variety to collision response
+        const tangentScale = 0.3;
+        const tanX = -pushY * tangentScale;
+        const tanY = pushX * tangentScale;
+        seg.prevX[rI] += tanX;
+        seg.prevY[rI] += tanY;
+        seg.prevX[rJ] -= tanX;
+        seg.prevY[rJ] -= tanY;
 
-          // ROTATIONAL IMPULSE: The collision force is off-center relative to
-          // each organism's root, so it should create torque (spin). Without this,
-          // collisions only translate organisms and they get locked in fixed
-          // orientations. We add a tangential velocity component to the colliding
-          // segment's prevPos — cheap (just a cross product + scale).
-          const tangentScale = 0.3; // Fraction of push converted to spin
-          // Tangent of push = perpendicular to push direction
-          const tanX = -pushY * tangentScale;
-          const tanY = pushX * tangentScale;
-          // Apply opposite tangential kicks to create counter-rotation
-          seg.prevX[i] += tanX;
-          seg.prevY[i] += tanY;
-          seg.prevX[j] -= tanX;
-          seg.prevY[j] -= tanY;
-        }
+        // (Collision torque removed — was causing violent spinning via underdamped accumulator)
       }
     }
   }
@@ -461,6 +448,11 @@ export function enforceTankBoundaryCollisions(world: World): void {
 
   for (let i = 0; i < count; i++) {
     if (!seg.alive[i]) continue;
+    // Skip non-root segments — their positions are determined by the rigid snap
+    // relative to their root. Pushing non-root independently creates snap-boundary
+    // oscillation: snap puts them back, boundary pushes them out, every tick.
+    // Root-only boundary ensures the whole organism moves away from walls correctly.
+    if (seg.parentOffset[i] !== 0) continue;
     // Depth-based extra margin: |depth - 0.5| * 2 → 0 at mid, 1 at extremes
     const depthExtremity = Math.abs(seg.segmentDepth[i] - 0.5) * 2;
     const r = baseR + depthExtremity * parallaxMargin;
@@ -532,6 +524,8 @@ export function enforceTankBoundaryCollisions(world: World): void {
           seg.prevX[i] = seg.x[i] - (velX - velDot * (-bestNx));
           seg.prevY[i] = seg.y[i] - (velY - velDot * (-bestNy));
         }
+
+        // (Wall torque removed — was causing violent spinning via underdamped accumulator)
       }
     } else if (!isInteriorCell(col, row)) {
       // Phase 2: Segment center is inside a BOUNDARY tank cell — check if radius
@@ -618,58 +612,64 @@ function applyCurrentForces(world: World): void {
 }
 
 
+// ─── Angular Velocity Constants ──────────────────────────────────────────────
+// Each organism has an angularVelocity (rad/tick) that decays each tick and is
+// injected by physics events: wall bounces, collisions, and Brownian noise.
+const ANGULAR_DAMPING        = 0.85;   // Per-tick decay — stronger to kill oscillation quickly
+const BROWNIAN_ANGULAR_KICK  = 0.015;  // Max random angular impulse per tick (gentler ambient wobble)
+const STEERING_DIRECT_GAIN   = 0.04;   // Direct orientationAngle nudge toward velocity (first-order, no oscillation)
+
+
 /**
- * Brownian Rotation — Prevents organisms from locking into fixed orientations
- *
- * Without external torque, organisms (especially small 2-3 segment ones) get
- * locked into whatever orientation they're born with. Collisions translate
- * organisms but barely rotate them because chain constraints distribute
- * velocity evenly across segments.
- *
- * This simulates thermal Brownian rotation: a random angular displacement
- * each tick. All segments rotate equally around the root, preserving internal
- * angles and chain distances. Both pos and prevPos move, so no velocity is
- * injected — it's a pure orientation change.
- *
- * Applied to ALL organisms (including those with yellow) because even
- * yellow organisms only get torque when actively thrusting, and their
- * thrust is often symmetric (no net rotation).
+ * Brownian Rotation — Kick angularVelocity with random thermal noise.
+ * Accumulated angular velocity decays via ANGULAR_DAMPING, giving natural
+ * drift without locked orientations.
  */
-function applyBrownianRotation(world: World): void {
+export function applyBrownianRotation(world: World): void {
+  for (const org of world.organisms.values()) {
+    if (!org.alive) continue;
+    org.angularVelocity += (Math.random() - 0.5) * 2 * BROWNIAN_ANGULAR_KICK;
+  }
+}
+
+
+/**
+ * Velocity Steering — nudge angularVelocity toward root's direction of travel.
+ * Organisms gradually face where they're going (wall bounces, currents, thrust).
+ */
+function applyVelocitySteering(world: World): void {
   const seg = world.segments;
-  const strength = BROWNIAN_ROTATION_STRENGTH;
 
   for (const org of world.organisms.values()) {
-    if (!org.alive || org.segmentCount < 2) continue;
+    if (!org.alive) continue;
 
     const root = org.firstSegment;
     if (!seg.alive[root]) continue;
 
-    // Tiny random spin — rotate ALL segments around root
-    const spin = (Math.random() - 0.5) * 2 * strength;
-    const cosS = Math.cos(spin);
-    const sinS = Math.sin(spin);
-    const rx = seg.x[root];
-    const ry = seg.y[root];
+    const vx = seg.x[root] - seg.prevX[root];
+    const vy = seg.y[root] - seg.prevY[root];
 
-    for (let i = 1; i < org.segmentCount; i++) {
-      const idx = root + i;
-      if (!seg.alive[idx]) continue;
+    if (vx * vx + vy * vy < 0.0004) continue; // Not moving meaningfully — skip
 
-      const dx = seg.x[idx] - rx;
-      const dy = seg.y[idx] - ry;
-      const newDx = dx * cosS - dy * sinS;
-      const newDy = dx * sinS + dy * cosS;
+    // Shortest angular delta, normalized to [-π, π]
+    let delta = Math.atan2(vy, vx) - org.orientationAngle;
+    if (delta > Math.PI) delta -= 2 * Math.PI;
+    else if (delta < -Math.PI) delta += 2 * Math.PI;
 
-      const corrX = (rx + newDx) - seg.x[idx];
-      const corrY = (ry + newDy) - seg.y[idx];
+    org.orientationAngle += delta * STEERING_DIRECT_GAIN; // Direct nudge — bypasses accumulator, no oscillation
+  }
+}
 
-      // Move BOTH pos and prevPos — pure orientation change, no velocity injection
-      seg.x[idx] += corrX;
-      seg.y[idx] += corrY;
-      seg.prevX[idx] += corrX;
-      seg.prevY[idx] += corrY;
-    }
+
+/**
+ * Angular Velocity Integration — apply damping then integrate into orientationAngle.
+ * Called once per tick after Brownian + steering have kicked angularVelocity.
+ */
+function integrateAngularVelocity(world: World): void {
+  for (const org of world.organisms.values()) {
+    if (!org.alive) continue;
+    org.angularVelocity *= ANGULAR_DAMPING;
+    org.orientationAngle += org.angularVelocity;
   }
 }
 
@@ -679,19 +679,26 @@ export function runConstraints(world: World, config: SimConfig): void {
   syncFastTankCells(world);
 
   integrateVerlet(world, config);
-  applyCurrentForces(world);  // Inject current forces after verlet
-  applyBrownianRotation(world);  // Prevent wall-alignment bias for non-yellow organisms
+  applyCurrentForces(world);
+  applyBrownianRotation(world);       // Kick angularVelocity with thermal noise
+  applyVelocitySteering(world);       // Directly nudge orientationAngle toward direction of travel
+  integrateAngularVelocity(world);    // Damp + apply angularVelocity → orientationAngle
 
-  for (let iter = 0; iter < CHAIN_CONSTRAINT_ITERATIONS; iter++) {
-    enforceChainConstraints(world);
-    enforceAngularConstraints(world);
-    // Hard boundaries inside every iteration — prevents chain/angular
-    // constraints from pulling segments back through tank cell boundaries
-    enforceTankBoundaryCollisions(world);
-  }
+  // 1. Settle roots against walls.
+  enforceTankBoundaryCollisions(world);
 
+  // 2. Rigid body snap — place all non-root segments at exact rest positions.
+  enforceAngularConstraints(world);
+
+  // 3. Inter-organism collision — impulses redirected to roots.
   resolveCollisions(world);
 
-  // Final hard boundary pass after collisions push segments around
+  // 4. Re-snap after roots moved by collision impulses.
+  enforceAngularConstraints(world);
+
+  // 5. Final boundary — clamp roots pushed outside by collisions.
   enforceTankBoundaryCollisions(world);
+
+  // 6. Re-snap so non-root prevX is anchored to root's boundary-corrected position.
+  enforceAngularConstraints(world);
 }

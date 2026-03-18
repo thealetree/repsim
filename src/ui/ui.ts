@@ -18,7 +18,7 @@ import {
   DEFAULT_CONFIG,
 } from '../constants';
 import { createSpontaneousStrain, infectSegment } from '../simulation/virus';
-import { buildSaveShareSection, createShareButton, createSpawnInput, buildOrganismSlots, flushWithoutReseed, clearAutoSave } from './save-share';
+import { buildSaveShareSection, createShareButton, createSpawnInput, buildOrganismSlots, flushWithoutReseed, clearAutoSave, saveOrganismToInspectorSync, autoSave } from './save-share';
 
 // ─── Color names for display ──────────────────────────────────
 const COLOR_NAMES: Record<number, string> = {
@@ -788,7 +788,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.7.0</div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.7.1</div>
   `;
 
   // Virus section
@@ -1256,6 +1256,22 @@ export function createUI(
   shareBtn.style.display = 'none';
   orgInfoEl.parentElement!.appendChild(shareBtn);
 
+  // Edit in Inspector button (shown when organism is selected)
+  const inspectorBtn = document.createElement('button');
+  inspectorBtn.className = 'ui-btn';
+  inspectorBtn.textContent = '🔬 Edit in Inspector';
+  inspectorBtn.style.cssText = 'width:100%;margin-top:4px;display:none;';
+  inspectorBtn.addEventListener('click', () => {
+    const orgId = renderer.selectedOrganismId;
+    if (orgId === null) return;
+    const org = engine.world.organisms.get(orgId);
+    if (!org?.alive) return;
+    saveOrganismToInspectorSync(org.genome, org.generation, org.name);
+    autoSave(engine);                     // Snapshot tank state to sessionStorage before leaving
+    window.location.href = '/inspector/'; // Same-tab navigation — sessionStorage survives the round-trip
+  });
+  orgInfoEl.parentElement!.appendChild(inspectorBtn);
+
   // Spawn from URL input (always visible in organism section)
   const spawnInput = createSpawnInput(engine);
   orgInfoEl.parentElement!.appendChild(spawnInput);
@@ -1266,7 +1282,9 @@ export function createUI(
 
   function updateOrgInfo(org: Organism | undefined): void {
     orgInfoEl.innerHTML = renderOrganismInfo(org);
-    shareBtn.style.display = org?.alive ? '' : 'none';
+    const alive = org?.alive ? '' : 'none';
+    shareBtn.style.display = alive;
+    inspectorBtn.style.display = alive;
   }
 
   renderer.onOrganismSelected = (id: number | null) => {
