@@ -354,6 +354,11 @@ function runYellowMovement(world: World, config: SimConfig): void {
 
     // Apply thrust from each alive yellow segment
     const topology = org.topology;
+    // Pre-compute orientation basis — matches renderer topology rotation exactly.
+    // With cap-focus joints, atan2(self−parent) gives a blended direction that
+    // dilutes the ny depth-impulse component; genome cumulative angle avoids this.
+    const cosOri = Math.cos(org.orientationAngle);
+    const sinOri = Math.sin(org.orientationAngle);
     let depthImpulse = 0; // Accumulate depth change from all yellows
 
     for (let i = 0; i < org.segmentCount; i++) {
@@ -368,35 +373,11 @@ function runYellowMovement(world: World, config: SimConfig): void {
       if (org.rootHealthReserve < moveCost) continue;
       org.rootHealthReserve -= moveCost;
 
-      // Compute facing direction (same logic as renderer pill rotation)
-      let dirX = 0;
-      let dirY = 0;
+      // Thrust direction = genome cumulative angle in world space (unit vector).
+      // Matches the renderer pill rotation: cos/sin of (orientationAngle + cumAngle[i]).
+      const nx = cosOri * topology.cosCumAngle[i] - sinOri * topology.sinCumAngle[i];
+      const ny = sinOri * topology.cosCumAngle[i] + cosOri * topology.sinCumAngle[i];
 
-      if (topology.isLeaf[i]) {
-        // Leaf: face away from parent (push outward)
-        if (i > 0) {
-          const parentGlobal = idx + seg.parentOffset[idx];
-          if (seg.alive[parentGlobal]) {
-            dirX = seg.x[idx] - seg.x[parentGlobal];
-            dirY = seg.y[idx] - seg.y[parentGlobal];
-          }
-        }
-      } else {
-        // Root or internal: face toward first child
-        const firstChildGeneIdx = topology.children[i][0];
-        const childGlobal = org.firstSegment + firstChildGeneIdx;
-        if (seg.alive[childGlobal]) {
-          dirX = seg.x[childGlobal] - seg.x[idx];
-          dirY = seg.y[childGlobal] - seg.y[idx];
-        }
-      }
-
-      // Normalize and apply thrust (scaled by length)
-      const len = Math.sqrt(dirX * dirX + dirY * dirY);
-      if (len < 0.01) continue;
-
-      const nx = dirX / len;
-      const ny = dirY / len;
       const thrust = YELLOW_THRUST_STRENGTH * lengthMult;
 
       // Inject velocity into ROOT — organisms are rigid bodies, so thrust anywhere
