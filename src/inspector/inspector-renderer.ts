@@ -55,6 +55,8 @@ export interface InspectorRenderer {
   screenToWorld(sx: number, sy: number): { wx: number; wy: number };
   /** Return the zoom level so the editor can use it for hit detection. */
   getZoom(): number;
+  /** Shift + zoom camera so tank is centred above an open mobile panel. Pass null to restore default. */
+  setCameraForMobilePanel(sheetHeightPx: number | null): void;
 }
 
 
@@ -155,6 +157,10 @@ export async function createInspectorRenderer(width: number, height: number): Pr
   const ZOOM_SPEED = 0.1;
   const ZOOM_MIN = 0.05;
   const ZOOM_MAX = 30;
+
+  // Animated camera targets for mobile panel open/close (null = no animation active)
+  let targetCameraZoom: number | null = null;
+  let targetCameraY:   number | null = null;
 
   function applyCamera(): void {
     worldContainer.scale.set(camera.zoom);
@@ -424,7 +430,37 @@ export async function createInspectorRenderer(width: number, height: number): Pr
 
   // Apply camera each frame (called from render loop after physics)
   function updateCamera(): void {
+    // Lerp toward mobile panel targets (no-op when both null)
+    if (targetCameraZoom !== null) {
+      camera.zoom += (targetCameraZoom - camera.zoom) * 0.15;
+      if (Math.abs(targetCameraZoom - camera.zoom) < 0.0005) {
+        camera.zoom = targetCameraZoom;
+        targetCameraZoom = null;
+      }
+    }
+    if (targetCameraY !== null) {
+      camera.y += (targetCameraY - camera.y) * 0.15;
+      if (Math.abs(targetCameraY - camera.y) < 0.5) {
+        camera.y = targetCameraY;
+        targetCameraY = null;
+      }
+    }
     applyCamera();
+  }
+
+  function setCameraForMobilePanel(sheetHeightPx: number | null): void {
+    if (sheetHeightPx === null) {
+      targetCameraZoom = computeDefaultZoom();
+      targetCameraY = 0;
+    } else {
+      const TAB_BAR_H = 52;
+      const TOP_BAR_H = 40;
+      const availH = screenHeight - TAB_BAR_H - sheetHeightPx - TOP_BAR_H;
+      const newZoom = Math.min(screenWidth, availH) * 0.40 / INSPECTOR_TANK_RADIUS;
+      targetCameraZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
+      const availCentreScreenY = TOP_BAR_H + availH / 2;
+      targetCameraY = (screenHeight / 2 - availCentreScreenY) / targetCameraZoom;
+    }
   }
 
   return {
@@ -437,5 +473,6 @@ export async function createInspectorRenderer(width: number, height: number): Pr
     setTheme,
     screenToWorld,
     getZoom: getZoom,
+    setCameraForMobilePanel,
   };
 }

@@ -577,8 +577,8 @@ function injectInspectorStyles(): void {
         top: auto;
         bottom: 52px;
         width: 100%;
-        height: 55vh;
-        max-height: 55vh;
+        height: 28vh;
+        max-height: 28vh;
         transform: translateY(100%);
         transition: transform 0.25s ease;
         border-top: 1px solid var(--ui-border);
@@ -1611,10 +1611,12 @@ export function createInspectorUI(
           leftPanel.classList.remove('mobile-visible');
           rightPanel.classList.remove('mobile-visible');
           activeTab = null;
+          renderer.setCameraForMobilePanel(null);
         } else {
           leftPanel.classList.toggle('mobile-visible', key === 'genome');
           rightPanel.classList.toggle('mobile-visible', key === 'edit');
           activeTab = key;
+          renderer.setCameraForMobilePanel(window.innerHeight * 0.28);
         }
       });
       return btn;
@@ -1637,6 +1639,7 @@ export function createInspectorUI(
         left.classList.remove('mobile-visible');
         right.classList.remove('mobile-visible');
         activeTab = null;
+        renderer.setCameraForMobilePanel(null);
       }
     });
   }
