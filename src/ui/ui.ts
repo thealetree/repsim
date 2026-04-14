@@ -843,7 +843,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.9.2</div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.9.3</div>
   `;
 
   // Virus section
@@ -927,6 +927,11 @@ function buildZoomControls(): HTMLElement {
   el.id = 'repsim-zoom-controls';
   el.className = 'repsim-ui';
   el.innerHTML = `
+    <button class="zoom-btn" id="zoom-recenter" title="Recenter view">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2 L19 17 L12 13 L5 17 Z"/>
+      </svg>
+    </button>
     <button class="zoom-btn" id="zoom-in" title="Zoom in">+</button>
     <button class="zoom-btn" id="zoom-out" title="Zoom out">&minus;</button>
   `;
@@ -1133,6 +1138,9 @@ export function createUI(
 
   // ── Zoom buttons ──
   const ZOOM_DELTA = 120; // equivalent to one scroll tick
+  document.getElementById('zoom-recenter')!.addEventListener('click', () => {
+    renderer.recenterView();
+  });
   document.getElementById('zoom-in')!.addEventListener('click', () => {
     renderer.zoom(ZOOM_DELTA);
   });

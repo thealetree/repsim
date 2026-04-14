@@ -108,6 +108,7 @@ export interface Renderer {
   setDesaturated(on: boolean): void;
   setToolMode(mode: ToolMode): void;
   zoom(delta: number): void;
+  recenterView(): void;
 }
 
 
@@ -673,6 +674,12 @@ export async function createRenderer(width: number, height: number): Promise<Ren
 
     zoom(delta: number): void {
       zoomCamera(camera, delta, screenWidth / 2, screenHeight / 2, screenWidth, screenHeight);
+    },
+
+    recenterView(): void {
+      camera.x = 0;
+      camera.y = 0;
+      camera.zoom = CAMERA_DEFAULT_ZOOM;
     },
 
     render(world: World, alpha: number): void {
