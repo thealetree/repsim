@@ -83,15 +83,15 @@ export const SCENARIOS: ScenarioDef[] = [
     ],
     tankCells: [
       ...rectCells(-17, -3, -13, 13),  // Left Room (lit): 15 wide × 27 tall
-      ...rectCells(-2, 0, -2, 2),       // Corridor: 3 wide × 5 tall
-      ...rectCells(1, 15, -13, 13),     // Right Room (dark): 15 wide × 27 tall
+      ...rectCells(-2, 22, -1, 1),      // Corridor: 25 wide × 3 tall (horizontal barbell bar)
+      ...rectCells(23, 37, -13, 13),    // Right Room (dark): 15 wide × 27 tall (shifted right)
     ],
     lights: [
       { id: 1, x: -1120, y: -480, radius: 900, intensity: 2.0 },
       { id: 2, x: -1120, y:  480, radius: 900, intensity: 2.0 },
     ],
     temps: [
-      { id: 1, x: 960, y: 0, radius: 900, intensity: 1.2 },
+      { id: 1, x: 2720, y: 0, radius: 900, intensity: 1.2 },
     ],
     config: {
       repCount: 180,

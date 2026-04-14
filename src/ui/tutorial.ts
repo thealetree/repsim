@@ -117,6 +117,12 @@ const STEPS: TutorialStep[] = [
     position: 'left',
   },
   {
+    title: 'Scenarios',
+    body: 'Try guided lessons that demonstrate specific biology concepts like directional selection and genetic drift. Each scenario sets up a custom environment with teacher-friendly explanations.',
+    target: '[data-section="scenarios"]',
+    position: 'left',
+  },
+  {
     title: 'Charts',
     body: 'Track population, segments, and evolution over time. Both side panels can be collapsed with their edge arrows.',
     target: '#repsim-left-panel',
