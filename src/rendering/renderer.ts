@@ -68,6 +68,7 @@ import {
   CURRENT_DEFAULT_RADIUS,
   CURRENT_DEFAULT_STRENGTH,
   CURRENT_COLOR,
+  CAMERA_DEFAULT_ZOOM,
 } from '../constants';
 import { VirusEffect } from '../types';
 import { computeLight, getDayNightMultiplier } from '../simulation/environment';
