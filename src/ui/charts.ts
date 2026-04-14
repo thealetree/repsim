@@ -438,6 +438,8 @@ export function createChartSystem(
 
   // Chart sections
   const canvases: HTMLCanvasElement[] = [];
+  const placeholders: HTMLElement[] = [];
+  let hasData = false;
 
   for (const chart of charts) {
     const sectionId = `chart-${chart.id}`;
@@ -461,12 +463,23 @@ export function createChartSystem(
       header.querySelector('.section-chevron')!.classList.add('collapsed');
     }
 
+    const canvasWrap = document.createElement('div');
+    canvasWrap.style.cssText = 'position:relative;';
+
     const canvas = document.createElement('canvas');
     canvas.width = CHART_PANEL_WIDTH - 16; // account for padding
     canvas.height = CHART_HEIGHT;
-    canvas.style.cssText = `width:100%;height:${CHART_HEIGHT}px;border-radius:4px;background:var(--ui-surface);`;
-    body.appendChild(canvas);
+    canvas.style.cssText = `width:100%;height:${CHART_HEIGHT}px;border-radius:4px;background:var(--ui-surface);display:block;`;
+    canvasWrap.appendChild(canvas);
     canvases.push(canvas);
+
+    const placeholder = document.createElement('div');
+    placeholder.className = 'chart-placeholder';
+    placeholder.textContent = 'Collecting data\u2026';
+    canvasWrap.appendChild(placeholder);
+    placeholders.push(placeholder);
+
+    body.appendChild(canvasWrap);
 
     // Accordion toggle with persistence
     header.addEventListener('click', () => {
@@ -490,6 +503,12 @@ export function createChartSystem(
   events.on('chart:sample', () => {
     const sample = collectSample(engine);
     pushSample(chartData, sample);
+
+    // Hide placeholders once data starts arriving
+    if (!hasData && chartData.count >= 2) {
+      hasData = true;
+      for (const p of placeholders) p.style.display = 'none';
+    }
 
     // Derive birth/death rates
     birthRates.length = 0;
@@ -580,6 +599,21 @@ export function injectChartStyles(): void {
     }
     #repsim-left-panel-toggle:hover {
       color: var(--ui-text);
+    }
+
+    /* ── Chart placeholder ── */
+    .chart-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-style: italic;
+      color: var(--ui-text-muted);
+      pointer-events: none;
+      border-radius: 4px;
+      background: var(--ui-surface);
     }
 
     /* ── Mobile Responsive ── */

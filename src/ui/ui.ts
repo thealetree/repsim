@@ -26,7 +26,7 @@ const COLOR_NAMES: Record<number, string> = {
   1: 'Blue',
   2: 'Yellow',
   3: 'Red',
-  4: 'Black',
+  4: 'Purple',
   5: 'White',
 };
 
@@ -49,9 +49,9 @@ const CONFIG_SLIDERS: SliderDef[] = [
   { key: 'yellowFreq', label: 'Speed', min: 0.25, max: 2.25, step: 0.25, invert: true }, // default 1.25; invert so + = faster
   { key: 'redDamage', label: 'Attack', min: 50, max: 750, step: 50 },      // default 400
   { key: 'purpleCost', label: 'Mate Cost', min: 500, max: 6500, step: 250 }, // default 3500
-  { key: 'asexMutationRate', label: 'Mutate', min: 0, max: 2, step: 0.1 }, // default 1
-  { key: 'sexMutationRate', label: 'Sex Mut', min: 0, max: 4, step: 0.1 }, // default 2
-  { key: 'sexGeneComboRate', label: 'Gene Mix', min: 0, max: 30, step: 1 }, // default 15
+  { key: 'asexMutationRate', label: 'Mutate %', min: 0, max: 2, step: 0.1, unit: '%' }, // default 1
+  { key: 'sexMutationRate', label: 'Sex Mut %', min: 0, max: 4, step: 0.1, unit: '%' }, // default 2
+  { key: 'sexGeneComboRate', label: 'Gene Mix %', min: 0, max: 30, step: 1, unit: '%' }, // default 15
 ];
 
 // ─── CSS Styles ──────────────────────────────────────────────
@@ -124,23 +124,39 @@ function injectStyles(): void {
     .top-left { display: flex; align-items: center; gap: 20px; }
     .top-right { display: flex; align-items: center; gap: 8px; }
 
+    /* ── Wordmark ── */
+    .repsim-wordmark {
+      font-size: 13px;
+      font-weight: 700;
+      opacity: 0.7;
+      color: var(--ui-text);
+      letter-spacing: -0.02em;
+      user-select: none;
+      flex-shrink: 0;
+    }
+
     /* ── Stats ── */
     #repsim-stats {
       display: flex;
-      gap: 20px;
+      gap: 16px;
       font-size: 12px;
       font-weight: 500;
       letter-spacing: -0.01em;
     }
-    .stat-item { color: var(--ui-text-dim); }
+    .stat-item { color: var(--ui-text-dim); white-space: nowrap; }
     .stat-value {
       color: var(--ui-text);
       font-variant-numeric: tabular-nums;
+      font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+      font-size: 11px;
       margin-left: 4px;
-      min-width: 3ch;
       display: inline-block;
       text-align: right;
     }
+    #stat-pop    { min-width: 4ch; }
+    #stat-births { min-width: 6ch; }
+    #stat-deaths { min-width: 6ch; }
+    #stat-time   { min-width: 5ch; }
 
     /* ── Buttons ── */
     .ui-btn {
@@ -343,7 +359,8 @@ function injectStyles(): void {
     .slider-label {
       font-size: 11px;
       color: var(--ui-text-dim);
-      width: 50px;
+      min-width: 52px;
+      max-width: 64px;
       flex-shrink: 0;
       white-space: nowrap;
     }
@@ -373,6 +390,15 @@ function injectStyles(): void {
     .slider-cap {
       font-size: 10px;
       color: var(--ui-text-muted);
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .slider-val {
+      font-size: 10px;
+      color: var(--ui-text-muted);
+      font-variant-numeric: tabular-nums;
+      min-width: 30px;
+      text-align: right;
       flex-shrink: 0;
       line-height: 1;
     }
@@ -451,6 +477,27 @@ function injectStyles(): void {
       color: var(--ui-text-muted);
       font-size: 12px;
     }
+
+    /* ── Tool mode indicator ── */
+    #repsim-tool-indicator {
+      position: fixed;
+      bottom: 30px;
+      left: 256px;
+      background: var(--ui-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--ui-border);
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 11px;
+      color: var(--ui-text-dim);
+      z-index: 100;
+      pointer-events: none;
+      font-family: var(--ui-font);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    #repsim-tool-indicator.visible { opacity: 1; }
 
     /* ── Focus indicator (toast) ── */
     #repsim-focus-indicator {
@@ -691,6 +738,8 @@ function buildTopBar(): HTMLElement {
   bar.className = 'repsim-ui';
   bar.innerHTML = `
     <div class="top-left">
+      <span class="repsim-wordmark">Repsim</span>
+      <div class="top-divider"></div>
       <div id="repsim-stats">
         <span class="stat-item">Pop<span class="stat-value" id="stat-pop">0</span></span>
         <span class="stat-item">Births<span class="stat-value" id="stat-births">0</span></span>
@@ -756,6 +805,9 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
     let val = (engine.config as unknown as Record<string, number>)[def.key];
     // Inverted sliders: display value = (min + max) - config value
     if (def.invert) val = def.min + def.max - val;
+    // Format initial display value
+    const displayVal = Number.isInteger(val) ? String(val) : val.toFixed(1);
+    const displayWithUnit = def.unit ? displayVal + def.unit : displayVal;
     slidersContent += `
       <div class="slider-row" id="row-${def.key}">
         <span class="slider-label">${def.label}</span>
@@ -763,6 +815,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <input type="range" class="config-slider" data-key="${def.key}"
           min="${def.min}" max="${def.max}" step="${def.step}" value="${val}">
         <span class="slider-cap">+</span>
+        <span class="slider-val" id="val-${def.key}">${displayWithUnit}</span>
       </div>
     `;
   }
@@ -778,7 +831,9 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
       <span class="hint-kbd">Middle/Right drag</span> Pan<br>
       <span class="hint-kbd">Left click</span> Select organism<br>
       <span class="hint-kbd">Shift+click</span> Sculpt tank<br>
-      <span class="hint-kbd">Alt+Scroll</span> Focus depth
+      <span class="hint-kbd">Alt+Scroll</span> Focus depth<br>
+      <span class="hint-kbd">Space</span> Pause / Resume<br>
+      <span class="hint-kbd">1 / 2 / 4 / 8</span> Set speed
     </div>
     <div id="repsim-tooltips-row" style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;margin-top:6px">
       <span style="font-size:11px;color:var(--ui-text-dim)">Tooltips</span>
@@ -788,7 +843,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.7.2</div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.8.0</div>
   `;
 
   // Virus section
@@ -854,6 +909,19 @@ function buildFocusIndicator(): HTMLElement {
   return el;
 }
 
+function buildToolIndicator(): HTMLElement {
+  const el = document.createElement('div');
+  el.id = 'repsim-tool-indicator';
+  return el;
+}
+
+const TOOL_INDICATOR_TEXT: Record<number, string> = {
+  1: 'Wall tool \u2014 click/drag to paint walls, Shift+drag to erase',
+  2: 'Light tool \u2014 click to place, scroll to resize, drag to move',
+  3: 'Temperature tool \u2014 click to place, scroll to resize, drag to move',
+  4: 'Current tool \u2014 click to place, scroll to resize, drag to move',
+};
+
 function buildZoomControls(): HTMLElement {
   const el = document.createElement('div');
   el.id = 'repsim-zoom-controls';
@@ -910,6 +978,7 @@ export function createUI(
   const rightPanel = buildRightPanel(engine);
   const toggleBtn = buildToggleButton();
   const focusIndicator = buildFocusIndicator();
+  const toolIndicator = buildToolIndicator();
 
   const zoomControls = buildZoomControls();
 
@@ -917,6 +986,7 @@ export function createUI(
   document.body.appendChild(rightPanel);
   document.body.appendChild(toggleBtn);
   document.body.appendChild(focusIndicator);
+  document.body.appendChild(toolIndicator);
   document.body.appendChild(zoomControls);
 
   // ── Stat references ──
@@ -948,18 +1018,54 @@ export function createUI(
 
   // ── Speed controls ──
   const speedButtons = topBar.querySelectorAll<HTMLButtonElement>('#repsim-speed-controls .ui-btn');
+  let lastSpeed = 1; // track last non-pause speed for spacebar toggle
+
+  function activateSpeedButton(speed: number): void {
+    speedButtons.forEach(b => b.classList.remove('active'));
+    const target = topBar.querySelector<HTMLButtonElement>(`[data-speed="${speed}"]`);
+    if (target) target.classList.add('active');
+  }
+
   speedButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
       const speed = Number(btn.dataset.speed);
-      speedButtons.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+      activateSpeedButton(speed);
       if (speed === 0) {
         engine.setPaused(true);
       } else {
+        lastSpeed = speed;
         if (engine.paused) engine.setPaused(false);
         engine.setSpeed(speed);
       }
     });
+  });
+
+  // ── Keyboard shortcuts ──
+  document.addEventListener('keydown', (e) => {
+    // Don't fire when user is typing in an input or textarea
+    const tag = (document.activeElement as HTMLElement)?.tagName?.toUpperCase();
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (engine.paused) {
+        engine.setPaused(false);
+        engine.setSpeed(lastSpeed);
+        activateSpeedButton(lastSpeed);
+      } else {
+        engine.setPaused(true);
+        activateSpeedButton(0);
+      }
+      return;
+    }
+
+    if (e.key === '1' || e.key === '2' || e.key === '4' || e.key === '8') {
+      const speed = Number(e.key);
+      lastSpeed = speed;
+      if (engine.paused) engine.setPaused(false);
+      engine.setSpeed(speed);
+      activateSpeedButton(speed);
+    }
   });
 
   // ── Empty (kill all organisms, keep tank/config, do NOT reseed) ──
@@ -1089,11 +1195,11 @@ export function createUI(
     wireAccordion(header, body, sectionId);
   });
 
-  // ── Save & Share section (inserted after organism section) ──
+  // ── Save & Share section (inserted between Simulation and Controls) ──
   const saveShareSection = buildSaveShareSection(engine, renderer, events, tooltips);
-  const virusSection = rightPanel.querySelector('[data-section="virus"]');
-  if (virusSection) {
-    rightPanel.insertBefore(saveShareSection, virusSection);
+  const controlsSection = rightPanel.querySelector('[data-section="controls"]');
+  if (controlsSection) {
+    rightPanel.insertBefore(saveShareSection, controlsSection);
   } else {
     rightPanel.appendChild(saveShareSection);
   }
@@ -1129,12 +1235,21 @@ export function createUI(
   configSliders.forEach((slider) => {
     const key = slider.dataset.key!;
     const def = CONFIG_SLIDERS.find(d => d.key === key);
+    const valEl = document.getElementById(`val-${key}`);
+
+    function updateSliderVal(displayVal: number): void {
+      if (!valEl) return;
+      const formatted = Number.isInteger(displayVal) ? String(displayVal) : displayVal.toFixed(1);
+      valEl.textContent = def?.unit ? formatted + def.unit : formatted;
+    }
 
     slider.addEventListener('input', () => {
-      let val = parseFloat(slider.value);
+      const displayVal = parseFloat(slider.value);
+      updateSliderVal(displayVal);
       // Inverted sliders: convert display value back to config value
-      if (def?.invert) val = def.min + def.max - val;
-      (engine.config as unknown as Record<string, number | boolean>)[key] = val;
+      let configVal = displayVal;
+      if (def?.invert) configVal = def.min + def.max - displayVal;
+      (engine.config as unknown as Record<string, number | boolean>)[key] = configVal;
     });
   });
 
@@ -1152,6 +1267,12 @@ export function createUI(
           const displayVal = sliderDef?.invert ? sliderDef.min + sliderDef.max - defVal : defVal;
           slider.value = String(displayVal);
           (engine.config as unknown as Record<string, number | boolean>)[key] = defVal;
+          // Sync readout
+          const valEl = document.getElementById(`val-${key}`);
+          if (valEl) {
+            const formatted = Number.isInteger(displayVal) ? String(displayVal) : displayVal.toFixed(1);
+            valEl.textContent = sliderDef?.unit ? formatted + sliderDef.unit : formatted;
+          }
         }
       });
     });
@@ -1233,6 +1354,12 @@ export function createUI(
       let val = (engine.config as unknown as Record<string, number>)[key];
       if (def?.invert) val = def.min + def.max - val;
       slider.value = String(val);
+      // Sync readout
+      const valEl = document.getElementById(`val-${key}`);
+      if (valEl) {
+        const formatted = Number.isInteger(val) ? String(val) : val.toFixed(1);
+        valEl.textContent = def?.unit ? formatted + def.unit : formatted;
+      }
     });
 
     // Virus controls
@@ -1320,6 +1447,17 @@ export function createUI(
     });
   });
 
+  // ── Tool mode indicator (bottom-left canvas badge) ──
+  events.on('tool:changed', ({ mode }) => {
+    const text = TOOL_INDICATOR_TEXT[mode];
+    if (text) {
+      toolIndicator.textContent = text;
+      toolIndicator.classList.add('visible');
+    } else {
+      toolIndicator.classList.remove('visible');
+    }
+  });
+
   // ── Source selection — forward to bottom environment panel via events ──
   renderer.onSourceSelected = (type, id) => {
     events.emit('source:selected', { type: type ?? null, id: id ?? null });
@@ -1340,8 +1478,8 @@ export function createUI(
     }
 
     // Tool icons
-    const toolKeys = ['tool-select', 'tool-tank', 'tool-light', 'tool-temp'];
-    topBar.querySelectorAll('#repsim-tool-icons .ui-btn-icon').forEach((btn, i) => {
+    const toolKeys = ['tool-select', 'tool-tank', 'tool-light', 'tool-temp', 'tool-current'];
+    topBar.querySelectorAll('#repsim-tool-icons .tool-icon').forEach((btn, i) => {
       if (toolKeys[i]) tooltips.attach(btn as HTMLElement, toolKeys[i]);
     });
 

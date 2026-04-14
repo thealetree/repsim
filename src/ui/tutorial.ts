@@ -63,8 +63,8 @@ const STEPS: TutorialStep[] = [
     position: 'center',
   },
   {
-    title: 'Black = Reproduction',
-    body: 'Organisms with black segments reproduce sexually on contact\u2009—\u2009mixing genomes from two parents.',
+    title: 'Purple = Reproduction',
+    body: 'Organisms with purple segments reproduce sexually on contact\u2009—\u2009mixing genomes from two parents.',
     target: null,
     position: 'center',
   },
@@ -79,6 +79,12 @@ const STEPS: TutorialStep[] = [
     body: 'Healthy organisms reproduce automatically. Children may mutate\u2009—\u2009gaining, losing, or changing segments. The fittest shapes survive.',
     target: null,
     position: 'center',
+  },
+  {
+    title: 'Depth \u0026 Focus',
+    body: 'Organisms swim at different depths \u2014 blurry ones are deeper, sharp ones are nearer. The Focus slider adjusts which depth appears sharpest, like a microscope.',
+    target: '.top-focus-group',
+    position: 'below',
   },
   {
     title: 'Tools',
@@ -130,7 +136,7 @@ const STEP_COLORS: Record<number, string> = {
   3: '#4488ff', // blue
   4: '#ccaa22', // yellow
   5: '#dd4444', // red
-  6: '#888888', // gray (readable on both dark/light backgrounds)
+  6: '#9944cc', // purple (matches actual segment color)
   7: '#cccccc', // white
 };
 

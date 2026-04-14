@@ -303,6 +303,7 @@ export function createEnvironmentPanel(
           <input type="range" id="env-light" min="0" max="190" step="10" value="${engine.config.greenFeed}">
           <span class="env-slider-val" id="env-light-val">${engine.config.greenFeed}</span>
         </div>
+        <div id="env-light-auto-msg" style="display:none;font-size:9px;color:var(--ui-text-muted);font-style:italic;margin-top:-2px;margin-bottom:2px">Auto-managed by light sources</div>
         <div class="env-slider-row">
           <span class="env-slider-label">Viscosity</span>
           <input type="range" id="env-viscosity" min="0" max="1" step="0.05" value="${(1 - engine.config.baseViscosity).toFixed(2)}">
@@ -456,12 +457,14 @@ export function createEnvironmentPanel(
 
   // ── Update phase indicator bar + light/day-night grayout ──
   const lightSliderRow = lightSlider.closest('.env-slider-row') as HTMLElement;
+  const lightAutoMsg = document.getElementById('env-light-auto-msg')!;
   const phaseBar = document.getElementById('env-daynight-phase')!;
   const daynightControls = document.getElementById('daynight-controls')!;
   events.on('stats:updated', () => {
     // Gray out light slider + force to 0 when light sources are placed
     const hasLights = engine.world.lightSources.length > 0;
     lightSliderRow.classList.toggle('slider-disabled', hasLights);
+    lightAutoMsg.style.display = hasLights ? 'block' : 'none';
     if (hasLights && engine.config.greenFeed !== 0) {
       engine.config.greenFeed = 0;
       lightSlider.value = '0';

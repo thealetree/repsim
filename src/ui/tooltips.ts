@@ -23,6 +23,7 @@ const TOOLTIP_TEXTS: Record<string, string> = {
   'tool-tank': 'Tank tool — click/drag to paint or erase walls',
   'tool-light': 'Light tool — click to place, scroll to resize, drag to move',
   'tool-temp': 'Temperature tool — click to place heat/cold zones',
+  'tool-current': 'Current tool — click to place a water flow or whirlpool; drag to move, scroll to resize',
 
   // Speed controls
   'speed-pause': 'Pause simulation',
@@ -48,7 +49,7 @@ const TOOLTIP_TEXTS: Record<string, string> = {
   'slider-blueHP': 'Extra health capacity per blue segment',
   'slider-yellowFreq': 'Movement speed — how often yellow segments fire thrust',
   'slider-redDamage': 'Damage dealt per red segment attack',
-  'slider-purpleCost': 'Health cost to reproduce sexually (black segments)',
+  'slider-purpleCost': 'Health cost to reproduce sexually (purple segments)',
   'slider-asexMutationRate': 'Mutation chance per gene during asexual reproduction (%)',
   'slider-sexMutationRate': 'Mutation chance per gene during sexual reproduction (%)',
   'slider-sexGeneComboRate': 'Chance of picking the recessive parent\'s gene during crossover (%)',
