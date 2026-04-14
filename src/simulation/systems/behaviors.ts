@@ -267,7 +267,12 @@ function runRootDrain(world: World): void {
       );
     }
 
-    org.rootHealthReserve -= getRootDrain(org.genome.length) * metabolismMult;
+    // Asymmetric temperature: drain feels only 70% of the metabolism effect while
+    // photosynthesis feels 100%. Hot zones favor producers (bigger photo boost than
+    // drain boost). Cold zones favor conservers (drain cut more than photo cut).
+    // Neutral zones (metabolismMult = 1.0) are unaffected — 1 + (1-1)*0.7 = 1.0.
+    const drainMult = 1 + (metabolismMult - 1) * 0.7;
+    org.rootHealthReserve -= getRootDrain(org.genome.length) * drainMult;
     // Don't clamp to 0 here — healthChecks will handle death
   }
 }
@@ -775,6 +780,16 @@ function runTimedDeath(world: World): void {
 
   for (const org of world.organisms.values()) {
     if (!org.alive) continue;
+
+    // Fitness-based lifespan extension: organisms that maintain a high energy
+    // reserve age more slowly — each tick at >75% reserve adds 0.5 ticks to
+    // the death timer. An always-healthy organism can live up to ~2× as long,
+    // creating real selection pressure toward efficient energy management.
+    const reserveFraction = org.rootHealthReserve / org.rootHealthReserveMax;
+    if (reserveFraction > 0.75) {
+      org.timedDeathAt += 0.5;
+    }
+
     if (world.tick >= org.timedDeathAt) {
       toRemove.push(org.id);
     }

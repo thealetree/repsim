@@ -85,10 +85,25 @@ export function runReproduction(world: World, config: SimConfig): void {
   // Check for births periodically (meter filling happens in behavior systems)
   if (world.tick % 10 !== 0) return;  // Every 0.5s
 
-  // ── Population cap check ──
-  // If we're at the limit, don't even bother checking for births.
-  // This creates selection pressure — only the fastest-reproducing survive.
-  if (world.stats.population >= config.repLimit) return;
+  // ── Population cap: soft cap + hard safety ceiling ──
+  // Hard ceiling at 1.25× repLimit is a safety valve to prevent FPS degradation.
+  // Below that, reproduction probability decreases smoothly as population approaches
+  // repLimit — allowing emergent boom/bust cycles rather than a hard cliff.
+  //
+  //   pop < 80% repLimit  → full probability (no throttle)
+  //   pop = 100% repLimit → ~4% probability  (steep quadratic drop)
+  //   pop ≥ 125% repLimit → hard blocked      (performance safety valve)
+  const pop = world.stats.population;
+  const hardCeiling = Math.floor(config.repLimit * 1.25);
+  if (pop >= hardCeiling) return;
+
+  if (pop > config.repLimit * 0.8) {
+    // excessRatio: 0 at 80%, 1 at 100% (full repLimit), >1 beyond cap
+    const excessRatio = (pop - config.repLimit * 0.8) / (config.repLimit * 0.2);
+    // Quadratic drop: 1.0 at ratio=0, ~0.04 at ratio=1, 0 beyond ~1.02
+    const reproProb = Math.max(0, 1 - excessRatio * excessRatio * 0.96);
+    if (Math.random() > reproProb) return;
+  }
 
   // ── Collect organisms ready to reproduce ──
   const readyAsexual: Organism[] = [];
@@ -108,7 +123,7 @@ export function runReproduction(world: World, config: SimConfig): void {
   // ── Process asexual reproduction ──
   for (const parent of readyAsexual) {
     if (!parent.alive) continue;
-    if (world.stats.population >= config.repLimit) break;
+    if (world.stats.population >= hardCeiling) break;
 
     reproduceAsexually(world, parent, config);
   }
@@ -119,7 +134,7 @@ export function runReproduction(world: World, config: SimConfig): void {
 
   for (const org of readySexual) {
     if (!org.alive || mated.has(org.id)) continue;
-    if (world.stats.population >= config.repLimit) break;
+    if (world.stats.population >= hardCeiling) break;
 
     // Find a nearby mate (also has black, also ready, same depth layer)
     const mate = findMate(world, org, readySexual, mated);

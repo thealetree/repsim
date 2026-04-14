@@ -176,7 +176,7 @@ export const GREEN_FEED_INTERVAL_TICKS = 20;    // 1.0s — photosynthesis cycle
 // Each yellow segment fires on its organism's movement timer.
 
 export const YELLOW_THRUST_STRENGTH = 2.5;      // Verlet velocity impulse per yellow segment
-export const YELLOW_MOVEMENT_COST = 6;            // HP cost per yellow segment per thrust (was 12 — halved again for even cheaper movement)
+export const YELLOW_MOVEMENT_COST = 30;           // HP cost per yellow segment per thrust (~25-30% of one green segment's photosynthesis output — meaningful mobility tradeoff)
 export const YELLOW_DEPTH_IMPULSE = 0.03;        // Depth change per yellow from Y-component of thrust
 
 // ─── Red Attack Constants ───────────────────────────────────
@@ -186,7 +186,7 @@ export const YELLOW_DEPTH_IMPULSE = 0.03;        // Depth change per yellow from
 
 export const RED_ATTACK_RANGE = SEGMENT_RADIUS * 4;       // Proximity for attack (was *3=24, now *4=32)
 export const RED_ATTACK_COOLDOWN_TICKS = 12;               // 0.6s between attacks per organism (was 15)
-export const RED_ATTACK_HP_GAIN_FRACTION = 12.0;           // Attacker gains 12x damage as HP — carnivory is dominant strategy (was 6.0)
+export const RED_ATTACK_HP_GAIN_FRACTION = 1.0;            // Attacker gains 1x damage as HP — energy-neutral per hit; real predation reward comes from kill bonus + reserve transfer
 export const RED_KILL_BONUS = 300;                          // Bonus HP for finishing a segment kill
 
 // ── Organism Kill Reward ──
