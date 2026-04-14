@@ -82,16 +82,16 @@ export const SCENARIOS: ScenarioDef[] = [
       'Watch carefully as the two populations diverge. They begin with the same random mix of traits. By the end of the run, you should see two strikingly different communities occupying the same tank, separated by nothing but the presence or absence of light.',
     ],
     tankCells: [
-      ...rectCells(-17, -3, -13, 13),  // Left Room (lit): 15 wide × 27 tall
-      ...rectCells(-2, 22, -1, 1),      // Corridor: 25 wide × 3 tall (horizontal barbell bar)
-      ...rectCells(23, 37, -13, 13),    // Right Room (dark): 15 wide × 27 tall (shifted right)
+      ...rectCells(-21, -7, -13, 13),  // Left Room (lit): 15 wide × 27 tall
+      ...rectCells(-6, 6, -1, 1),      // Corridor: 13 wide × 3 tall (barbell bar — max that fits in tank)
+      ...rectCells(7, 21, -13, 13),    // Right Room (dark): 15 wide × 27 tall (shifted right)
     ],
     lights: [
-      { id: 1, x: -1120, y: -480, radius: 900, intensity: 2.0 },
-      { id: 2, x: -1120, y:  480, radius: 900, intensity: 2.0 },
+      { id: 1, x: -1440, y: -480, radius: 900, intensity: 2.0 },
+      { id: 2, x: -1440, y:  480, radius: 900, intensity: 2.0 },
     ],
     temps: [
-      { id: 1, x: 2720, y: 0, radius: 900, intensity: 1.2 },
+      { id: 1, x: 1160, y: 0, radius: 900, intensity: 1.2 },
     ],
     config: {
       repCount: 180,
