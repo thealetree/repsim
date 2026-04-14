@@ -52,6 +52,11 @@ const TABS: TabDef[] = [
     label: 'Organism',
     icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 8v4m-4 3c0-2.2 1.8-4 4-4s4 1.8 4 4m-8 0v4m8-4v4"/></svg>',
   },
+  {
+    id: 'scenarios',
+    label: 'Scenarios',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M9 3v6L5 16a2 2 0 001.8 3h10.4A2 2 0 0019 16l-4-7V3"/><path d="M7.5 16h9" stroke-width="1.5"/></svg>',
+  },
 ];
 
 // ─── Content Mapping ─────────────────────────────────────────
@@ -103,6 +108,16 @@ function buildContentMap(): ContentSlot[] {
         const share = panel.querySelector('[data-section="save-share"]');
         const controls = panel.querySelector('[data-section="controls"]');
         return [org, share, controls].filter(Boolean) as Node[];
+      },
+    },
+    {
+      tabId: 'scenarios',
+      originalParent: document.getElementById('repsim-right-panel'),
+      getNodes() {
+        const panel = document.getElementById('repsim-right-panel');
+        if (!panel) return [];
+        const scenarios = panel.querySelector('[data-section="scenarios"]');
+        return scenarios ? [scenarios] : [];
       },
     },
   ];

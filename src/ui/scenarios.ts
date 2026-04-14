@@ -417,6 +417,8 @@ export function createScenarioSystem(
     // Measure after display (display:flex but invisible)
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    const isMobileViewport = vw < 768;
+    const tabBarH = isMobileViewport ? 52 : 0;
     const maxW = Math.min(480, vw - 48);
     el.style.maxWidth = `${maxW}px`;
 
@@ -424,9 +426,10 @@ export function createScenarioSystem(
     const left = Math.max(12, (vw - maxW) / 2);
     el.style.left = `${left}px`;
 
-    // Vertical: center with top bar clearance
-    const estimatedH = Math.min(vh * 0.80, 600);
-    const top = Math.max(52, (vh - estimatedH) / 2);
+    // Vertical: center in the usable area (between top bar and tab bar)
+    const usableH = vh - 52 - tabBarH;
+    const estimatedH = Math.min(usableH * 0.85, 600);
+    const top = Math.max(52, 52 + (usableH - estimatedH) / 2);
     el.style.top = `${top}px`;
   }
 
@@ -611,7 +614,7 @@ export function injectScenarioStyles(): void {
     /* ── Scenario Popup ── */
     .scenario-popup {
       position: fixed;
-      z-index: 305;
+      z-index: 450;
       background: var(--ui-bg-solid);
       border: 1px solid var(--ui-accent);
       border-radius: 12px;
@@ -812,7 +815,17 @@ export function injectScenarioStyles(): void {
     /* Mobile: don't show badge text on small screens */
     @media (max-width: 480px) {
       .scenario-badge-label { display: none; }
-      .scenario-popup { left: 12px !important; right: 12px; max-width: none !important; }
+    }
+
+    /* Mobile: full-width popup above the bottom tab bar */
+    @media (max-width: 767px) {
+      .scenario-popup {
+        left: 12px !important;
+        right: 12px !important;
+        max-width: none !important;
+        /* Ensure it doesn't extend behind the 52px tab bar */
+        max-height: calc(100vh - 104px) !important;
+      }
     }
   `;
   document.head.appendChild(style);
