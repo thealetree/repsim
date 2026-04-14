@@ -166,7 +166,7 @@ export const SCENARIOS: ScenarioDef[] = [
     preamble: [
       'Natural selection requires numbers. When a population is large, favorable traits reliably spread because the statistics are on selection\'s side. But what happens when a catastrophe wipes out 95% of a population? The survivors aren\'t necessarily the best — they\'re the lucky. An excellent photosynthesizer caught in the wrong place dies just as certainly as a poor one.',
       'This "bottleneck effect" explains some of the strangest patterns in biology: why cheetahs are so genetically uniform, why island populations evolve bizarre traits, and why small founding populations often look nothing like the large populations they came from.',
-      'This experiment has two phases. In Phase 1, you\'ll run a large population and observe what natural selection produces in this environment. In Phase 2, you\'ll restart with only 8 organisms — simulating a mass extinction — and watch what genetic drift produces instead. Same environment, completely different outcome. Run Phase 2 again and you\'ll get yet another result.',
+      'This experiment has two phases. In Phase 1, you\'ll run a large population and observe what natural selection produces in this environment. In Phase 2, you\'ll restart with only 10 organisms — simulating a mass extinction — and watch what genetic drift produces instead. Same environment, completely different outcome. Run Phase 2 again and you\'ll get yet another result.',
     ],
     tankCells: rectCells(-15, 15, -10, 10),  // Simple large rectangle, 31 × 21 = 651 cells
     // No lights → ambient photosynthesis via greenFeed config (uniform environment)
@@ -181,16 +181,16 @@ export const SCENARIOS: ScenarioDef[] = [
     },
     watchFor: [
       { time: 'Phase 1 (~5 min at 8x)', text: 'Note the color distribution — this is what natural selection favors in a uniform environment. Remember which color dominates.' },
-      { time: 'Transition to Phase 2', text: 'Press Flush to clear organisms. In the Simulation panel, set Start Pop to 8 and Pop Limit to 30. Press Flush again to seed 8 founders.' },
-      { time: 'Phase 2 initial (~2–3 min)', text: 'Watch the tiny population. The 8 founders carry random colors — note which ones they have. This is genetic drift in action.' },
+      { time: 'Transition to Phase 2', text: 'Press Flush to clear organisms. In the Simulation panel, set Start Pop to 10 and Pop Limit to 50. Press Flush again to seed 10 founders.' },
+      { time: 'Phase 2 initial (~2–3 min)', text: 'Watch the tiny population. The 10 founders carry random colors — note which ones they have. This is genetic drift in action.' },
       { time: 'Phase 2 expansion', text: 'Increase Pop Limit to 400. Watch the population grow from the founder stock. The color distribution will reflect founder composition, not the environment.' },
-      { time: 'Bonus', text: 'Press Flush again with Start Pop=8, Pop Limit=30 for a fresh set of 8 founders. Get a completely different outcome from the same environment.' },
+      { time: 'Bonus', text: 'Press Flush again with Start Pop=10, Pop Limit=50 for a fresh set of 10 founders. Get a completely different outcome from the same environment.' },
     ],
     questions: [
       'In Phase 2, which color ended up most common after the population recovered? Was that the same color that dominated in Phase 1?',
       'We used the same tank, same settings, everything identical. The only difference was population size at the start. What does that tell us about genetic drift?',
       'If you were a conservation biologist trying to save a species that went through a bottleneck, why would you care about the genetic diversity of those few survivors?',
-      'In Phase 1 with 800 organisms, if a harmful mutation appeared in one organism, what typically happens? In Phase 2 with only 8, what\'s different?',
+      'In Phase 1 with 800 organisms, if a harmful mutation appeared in one organism, what typically happens? In Phase 2 with only 10, what\'s different?',
       'Cheetahs can accept skin grafts from unrelated individuals without immune rejection. Using what you observed in Phase 2, explain how that uniformity could arise.',
     ],
   },
