@@ -41,6 +41,9 @@ export interface EventMap {
 
   // Chart data sampling
   'chart:sample': { tick: number };
+
+  // Clear chart history (fired when a scenario starts/restarts)
+  'chart:clear': undefined;
 }
 
 // The event names are the keys of EventMap

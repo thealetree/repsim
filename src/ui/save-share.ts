@@ -324,7 +324,7 @@ function applyOrganismPayload(engine: SimulationEngine, payload: OrganismPayload
   spawnOrganismFromGenome(world, genome, x, y, engine.config, -1, payload.gen);
 }
 
-function applyTankPayload(engine: SimulationEngine, payload: TankPayload): void {
+export function applyTankPayload(engine: SimulationEngine, payload: TankPayload): void {
   const world = engine.world;
 
   // Apply tank cells

@@ -23,6 +23,7 @@ import { createChartSystem, injectChartStyles } from './ui/charts';
 import { parseUrlParams, injectSaveShareStyles, autoSave, autoRestore, loadOrganismFromInspector } from './ui/save-share';
 import { createTutorialSystem, createTutorialButton, autoStartTutorial, injectTutorialStyles } from './ui/tutorial';
 import { createEnvironmentPanel, injectEnvironmentPanelStyles } from './ui/environment-panel';
+import { createScenarioSystem, injectScenarioStyles } from './ui/scenarios';
 import { setupMobileLayout } from './ui/mobile-layout';
 import { DEFAULT_CONFIG, TANK_HALF_WIDTH, TANK_HALF_HEIGHT } from './constants';
 import { spawnOrganismFromGenome } from './simulation/world';
@@ -95,6 +96,10 @@ async function main(): Promise<void> {
 
   // ── 8c. Mobile Layout ──
   setupMobileLayout(engine, renderer, events);
+
+  // ── 9a. Scenario System ──
+  injectScenarioStyles();
+  createScenarioSystem(engine, renderer, events);
 
   // ── 9. Tutorial System ──
   injectTutorialStyles();

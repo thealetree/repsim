@@ -465,11 +465,6 @@ export function createEnvironmentPanel(
     const hasLights = engine.world.lightSources.length > 0;
     lightSliderRow.classList.toggle('slider-disabled', hasLights);
     lightAutoMsg.style.display = hasLights ? 'block' : 'none';
-    if (hasLights && engine.config.greenFeed !== 0) {
-      engine.config.greenFeed = 0;
-      lightSlider.value = '0';
-      lightVal.textContent = '0';
-    }
     daynightControls.classList.toggle('disabled', !hasLights);
 
     if (engine.world.dayNightEnabled && hasLights) {

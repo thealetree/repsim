@@ -499,6 +499,20 @@ export function createChartSystem(
   document.body.appendChild(panel);
   document.body.appendChild(toggle);
 
+  // ── Clear chart history (scenario start/restart) ──
+  events.on('chart:clear', () => {
+    chartData.count = 0;
+    chartData.writeIdx = 0;
+    birthRates.length = 0;
+    deathRates.length = 0;
+    hasData = false;
+    for (const p of placeholders) p.style.display = 'block';
+    for (const canvas of canvases) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  });
+
   // ── Subscribe to chart:sample events ──
   events.on('chart:sample', () => {
     const sample = collectSample(engine);
