@@ -131,6 +131,13 @@ export interface SegmentArrays {
   prevX: Float32Array;
   prevY: Float32Array;
 
+  // Render-time previous positions — snapshotted at the START of each sim tick.
+  // The renderer lerps between renderPrevX/Y (start of tick) and x/y (end of tick)
+  // using getAlpha(), so every rendered frame gets a smoothly interpolated position
+  // even when no new tick has occurred (e.g. 3 render frames per 1 tick at 1x speed).
+  renderPrevX: Float32Array;
+  renderPrevY: Float32Array;
+
   // Health per segment (starts at 1000; blue segments get bonus)
   health: Float32Array;
 

@@ -675,7 +675,7 @@ export async function createRenderer(width: number, height: number): Promise<Ren
       zoomCamera(camera, delta, screenWidth / 2, screenHeight / 2, screenWidth, screenHeight);
     },
 
-    render(world: World, _alpha: number): void {
+    render(world: World, alpha: number): void {
       currentWorld = world;
       onOrganismSelected = renderer.onOrganismSelected;
       onSourceSelected = renderer.onSourceSelected;
@@ -975,8 +975,11 @@ export async function createRenderer(width: number, height: number): Promise<Ren
           }
 
           if (sprite.tint !== 0xFFFFFF) sprite.tint = 0xFFFFFF; // Avoid PixiJS dirty flag when unchanged
-          sprite.x = seg.x[idx] + orgParallaxX;
-          sprite.y = seg.y[idx] + orgParallaxY;
+          // Lerp between previous and current tick positions using the accumulator
+          // fraction — gives sub-tick motion smoothness even when only 1 tick fires
+          // per 3 rendered frames (as at 1x speed). Pure rendering: sim state unchanged.
+          sprite.x = seg.renderPrevX[idx] + (seg.x[idx] - seg.renderPrevX[idx]) * alpha + orgParallaxX;
+          sprite.y = seg.renderPrevY[idx] + (seg.y[idx] - seg.renderPrevY[idx]) * alpha + orgParallaxY;
 
           // ── Compute pill rotation from genome cumulative angle ──
           // Must match enforceAngularConstraints: cap-focus placement uses cosOri*cosCum−sinOri*sinCum.
@@ -1126,11 +1129,13 @@ export async function createRenderer(width: number, height: number): Promise<Ren
           const outlineColor = currentTheme === 'light' ? 0x2a3050 : 0xffffff;
           const pulse = 0.6 + 0.4 * Math.sin(Date.now() / 250);
 
-          // Draw outline at every segment position
+          // Draw outline at every segment position (interpolated to match sprite positions)
           for (let i = 0; i < selOrg.segmentCount; i++) {
             const idx = selOrg.firstSegment + i;
             if (!seg.alive[idx]) continue;
-            selectionGraphics.circle(seg.x[idx], seg.y[idx], SEGMENT_RADIUS * 1.8);
+            const sx = seg.renderPrevX[idx] + (seg.x[idx] - seg.renderPrevX[idx]) * alpha;
+            const sy = seg.renderPrevY[idx] + (seg.y[idx] - seg.renderPrevY[idx]) * alpha;
+            selectionGraphics.circle(sx, sy, SEGMENT_RADIUS * 1.8);
             selectionGraphics.stroke({ color: outlineColor, width: 1.5, alpha: 0.4 * pulse });
           }
         } else {

@@ -82,9 +82,6 @@ const SEXUAL_REPRO_RANGE_SQ = SEXUAL_REPRO_RANGE * SEXUAL_REPRO_RANGE;
  * 5. Respect population cap — stop birthing when full
  */
 export function runReproduction(world: World, config: SimConfig): void {
-  // Check for births periodically (meter filling happens in behavior systems)
-  if (world.tick % 10 !== 0) return;  // Every 0.5s
-
   // ── Population cap: soft cap + hard safety ceiling ──
   // Hard ceiling at 1.25× repLimit is a safety valve to prevent FPS degradation.
   // Below that, reproduction probability decreases smoothly as population approaches
@@ -105,13 +102,19 @@ export function runReproduction(world: World, config: SimConfig): void {
     if (Math.random() > reproProb) return;
   }
 
-  // ── Collect organisms ready to reproduce ──
+  // ── Collect organisms ready to reproduce (this tick's bucket only) ──
+  // Instead of a global tick gate (all births on the same tick every 0.5s),
+  // each organism is assigned a bucket based on its id (id % 10). Only the
+  // bucket matching the current tick fires — spreading births across 10 ticks
+  // so they trickle in naturally rather than bursting in synchronized waves.
+  const tickBucket = world.tick % 10;
   const readyAsexual: Organism[] = [];
   const readySexual: Organism[] = [];
 
   for (const org of world.organisms.values()) {
     if (!org.alive) continue;
     if (org.reproMeter < REPRO_METER_MAX) continue;
+    if (org.id % 10 !== tickBucket) continue; // Only this tick's 1/10th bucket
 
     if (org.hasBlack) {
       readySexual.push(org);

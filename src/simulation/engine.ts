@@ -219,6 +219,15 @@ export function createSimulationEngine(
 function tickSimulation(world: World, config: SimConfig, events: EventBus): void {
   world.tick++;
 
+  // ── Snapshot positions for render-time interpolation ──
+  // The renderer lerps renderPrevX/Y → x/Y using getAlpha() so every
+  // rendered frame gets a smoothly interpolated position between ticks.
+  // Must happen before any physics so we capture start-of-tick positions.
+  const seg = world.segments;
+  const snapCount = world.segmentCount;
+  seg.renderPrevX.set(seg.x.subarray(0, snapCount));
+  seg.renderPrevY.set(seg.y.subarray(0, snapCount));
+
   // ── Behaviors ──
   // Photosynthesis, root drain, replenishment, yellow movement,
   // red attack, health checks, timed death
