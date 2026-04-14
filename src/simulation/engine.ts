@@ -86,24 +86,43 @@ export function createSimulationEngine(
 
     /**
      * Called every frame with the real time elapsed since last frame.
-     * Runs as many fixed-rate simulation ticks as needed to keep up.
+     * Runs as many fixed-rate simulation ticks as fit within a per-frame
+     * time budget, then defers the rest to the next frame via the accumulator.
+     *
+     * Why a time budget instead of a tick count cap?
+     * At high speeds (4x/8x) with large populations, each tick can be
+     * expensive (8-12ms). A fixed tick cap means "run N expensive ticks,
+     * which may take 80-100ms" — the long frame causes the next frame's
+     * delta to spike, which fills the accumulator, which causes another
+     * long frame — a pulsing stutter at high population.
+     *
+     * With a time budget, we stop the tick batch when wall-clock time
+     * exceeds ~13ms. Remaining accumulator carries to the next frame,
+     * gracefully reducing effective speed (7x, 6x…) rather than
+     * oscillating between 8x and 3x. No ticks are ever dropped.
      */
     update(deltaSeconds: number): void {
       if (engine.paused) return;
 
-      // Clamp delta to prevent "spiral of death"
-      // If a frame takes too long (e.g., tab was backgrounded), don't try
-      // to catch up with 100 ticks at once — just cap at 100ms worth
+      // Clamp delta to prevent "spiral of death" (e.g. tab was backgrounded)
       const clampedDelta = Math.min(deltaSeconds, 0.1);
       engine.accumulator += clampedDelta * engine.speed;
 
-      // Run fixed-timestep ticks until we've consumed enough time.
-      // Cap ticks per frame to prevent computational spiral at high speeds.
+      // Per-frame time budget: ~13ms leaves ~4ms headroom for rendering
+      // within a 16.67ms (60fps) frame. Absolute tick-count ceiling of 12
+      // is kept as a hard safety rail in case performance.now() is coarse.
+      const TICK_BUDGET_MS = 13;
+      const budgetStart = performance.now();
+
       let ticksThisFrame = 0;
       while (engine.accumulator >= SIM_DT && ticksThisFrame < 12) {
         tickSimulation(engine.world, engine.config, events);
         engine.accumulator -= SIM_DT;
         ticksThisFrame++;
+        // Stop if we've exhausted the per-frame budget.
+        // The remaining accumulator carries to the next frame so
+        // no simulation work is lost — it's just spread across frames.
+        if (performance.now() - budgetStart >= TICK_BUDGET_MS) break;
       }
     },
 
