@@ -684,6 +684,10 @@ export async function createRenderer(width: number, height: number): Promise<Ren
     },
 
     render(world: World, alpha: number): void {
+      // Safety clamp — alpha must stay in [0,1] to interpolate, not extrapolate.
+      // Engine already clamps, but guard here in case of any future call-site drift.
+      alpha = Math.min(1, Math.max(0, alpha));
+
       currentWorld = world;
       onOrganismSelected = renderer.onOrganismSelected;
       onSourceSelected = renderer.onSourceSelected;

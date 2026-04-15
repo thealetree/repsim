@@ -132,19 +132,26 @@ export function createSimulationEngine(
         engine.accumulator -= SIM_DT;
         ticksThisFrame++;
         // Stop if we've exhausted the per-frame budget.
-        // The remaining accumulator carries to the next frame so
-        // no simulation work is lost — it's just spread across frames.
         if (performance.now() - budgetStart >= TICK_BUDGET_MS) break;
+      }
+
+      // If the engine couldn't keep up (budget cap fired with debt remaining),
+      // drop the excess rather than letting it build. This keeps alpha in [0,1]
+      // so the renderer interpolates rather than extrapolates — segments stay
+      // locked to their organisms instead of scattering at high speed/population.
+      if (engine.accumulator > SIM_DT) {
+        engine.accumulator = SIM_DT;
       }
     },
 
     /**
      * Returns how far we are between the last tick and the next one.
      * 0 = just ticked, 1 = about to tick.
-     * The renderer can use this to interpolate positions for smoother visuals.
+     * The renderer uses this to interpolate positions for smoother visuals.
+     * Clamped to [0, 1] — budget-cap debt is dropped above, but we guard here too.
      */
     getAlpha(): number {
-      return engine.accumulator / SIM_DT;
+      return Math.min(1, engine.accumulator / SIM_DT);
     },
 
     /** Pause or unpause */
