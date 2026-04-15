@@ -252,6 +252,9 @@ export async function createRenderer(width: number, height: number): Promise<Ren
   let isDraggingSource = false;
   let onSourceSelected: ((type: 'light' | 'temperature' | 'current' | null, id: number | null) => void) | null = null;
 
+  // Animated scale for env source indicators (1.0 = select tool, 2.5 = env tool active)
+  let sourceIndicatorScale = 1.0;
+
   // ── Per-segment light cache (recomputed per sim tick) ──
   let segmentLightCache: Float32Array | null = null;
   let lightCacheTick = -1;
@@ -1158,35 +1161,55 @@ export async function createRenderer(width: number, height: number): Promise<Ren
       }
 
       // ── Show origin dots for sources when their tool mode is active ──
+      // Smoothly animate indicator scale: 2.5× when an env tool is active, 1× otherwise.
+      // This makes epicenters visually prominent and reveals radius circles when editing.
+      const isEnvToolActive = toolMode === ToolMode.Light || toolMode === ToolMode.Temperature || toolMode === ToolMode.Current;
+      sourceIndicatorScale += ((isEnvToolActive ? 2.5 : 1.0) - sourceIndicatorScale) * 0.12;
+      const ss = sourceIndicatorScale;
+      // envF goes 0→1 as the tool activates; used to fade in radius circles and ring weight
+      const envF = Math.max(0, (ss - 1.0) / 1.5);
+
       if (toolMode === ToolMode.Light) {
         for (const ls of world.lightSources) {
           const isSelected = selectedSourceId === ls.id && selectedSourceType === 'light';
-          selectionGraphics.circle(ls.x, ls.y, isSelected ? 16 : 12);
-          selectionGraphics.fill({ color: 0xffe8a0, alpha: isSelected ? 0.8 : 0.45 });
-          if (isSelected) {
-            selectionGraphics.circle(ls.x, ls.y, 20);
-            selectionGraphics.stroke({ color: 0xffe8a0, width: 2, alpha: 0.6 });
+          // Epicenter filled dot
+          const dotR = (isSelected ? 16 : 12) * ss;
+          selectionGraphics.circle(ls.x, ls.y, dotR);
+          selectionGraphics.fill({ color: 0xffe8a0, alpha: isSelected ? 0.85 : 0.5 });
+          // Outer ring around epicenter (all sources, not just selected)
+          selectionGraphics.circle(ls.x, ls.y, dotR + 5 * ss);
+          selectionGraphics.stroke({ color: 0xffe8a0, width: 1.5 + 1.5 * envF, alpha: isSelected ? 0.65 : 0.3 + 0.2 * envF });
+          // Radius circle — fades in as env tool activates, shows influence range
+          if (envF > 0.02) {
+            selectionGraphics.circle(ls.x, ls.y, ls.radius);
+            selectionGraphics.stroke({ color: 0xffe8a0, width: 1 + 2 * envF, alpha: envF * (isSelected ? 0.55 : 0.3) });
           }
         }
       } else if (toolMode === ToolMode.Temperature) {
         for (const ts of world.temperatureSources) {
           const isSelected = selectedSourceId === ts.id && selectedSourceType === 'temperature';
           const col = ts.intensity >= 0 ? 0xff5032 : 0x3250ff;
-          selectionGraphics.circle(ts.x, ts.y, isSelected ? 16 : 12);
-          selectionGraphics.fill({ color: col, alpha: isSelected ? 0.8 : 0.45 });
-          if (isSelected) {
-            selectionGraphics.circle(ts.x, ts.y, 20);
-            selectionGraphics.stroke({ color: col, width: 2, alpha: 0.6 });
+          const dotR = (isSelected ? 16 : 12) * ss;
+          selectionGraphics.circle(ts.x, ts.y, dotR);
+          selectionGraphics.fill({ color: col, alpha: isSelected ? 0.85 : 0.5 });
+          selectionGraphics.circle(ts.x, ts.y, dotR + 5 * ss);
+          selectionGraphics.stroke({ color: col, width: 1.5 + 1.5 * envF, alpha: isSelected ? 0.65 : 0.3 + 0.2 * envF });
+          if (envF > 0.02) {
+            selectionGraphics.circle(ts.x, ts.y, ts.radius);
+            selectionGraphics.stroke({ color: col, width: 1 + 2 * envF, alpha: envF * (isSelected ? 0.55 : 0.3) });
           }
         }
       } else if (toolMode === ToolMode.Current) {
         for (const cs of world.currentSources) {
           const isSelected = selectedSourceId === cs.id && selectedSourceType === 'current';
-          selectionGraphics.circle(cs.x, cs.y, isSelected ? 16 : 12);
-          selectionGraphics.fill({ color: CURRENT_COLOR, alpha: isSelected ? 0.8 : 0.45 });
-          if (isSelected) {
-            selectionGraphics.circle(cs.x, cs.y, 20);
-            selectionGraphics.stroke({ color: CURRENT_COLOR, width: 2, alpha: 0.6 });
+          const dotR = (isSelected ? 16 : 12) * ss;
+          selectionGraphics.circle(cs.x, cs.y, dotR);
+          selectionGraphics.fill({ color: CURRENT_COLOR, alpha: isSelected ? 0.85 : 0.5 });
+          selectionGraphics.circle(cs.x, cs.y, dotR + 5 * ss);
+          selectionGraphics.stroke({ color: CURRENT_COLOR, width: 1.5 + 1.5 * envF, alpha: isSelected ? 0.65 : 0.3 + 0.2 * envF });
+          if (envF > 0.02) {
+            selectionGraphics.circle(cs.x, cs.y, cs.radius);
+            selectionGraphics.stroke({ color: CURRENT_COLOR, width: 1 + 2 * envF, alpha: envF * (isSelected ? 0.55 : 0.3) });
           }
           // Flow indicator
           if (cs.type === CurrentType.Directional) {

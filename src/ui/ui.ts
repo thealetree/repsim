@@ -519,6 +519,29 @@ function injectStyles(): void {
     }
     #repsim-focus-indicator.visible { opacity: 1; }
 
+    /* ── Theme change toast ── */
+    #repsim-theme-toast {
+      position: fixed;
+      top: 52px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--ui-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--ui-border);
+      border-radius: 20px;
+      padding: 6px 16px;
+      font-size: 11px;
+      color: var(--ui-text-dim);
+      z-index: 200;
+      pointer-events: none;
+      font-family: var(--ui-font);
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      white-space: nowrap;
+    }
+    #repsim-theme-toast.visible { opacity: 1; }
+
     /* ── Hint text ── */
     .hint-text {
       font-size: 10px;
@@ -843,7 +866,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.9.8</div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.9.9</div>
   `;
 
   // Virus section
@@ -987,11 +1010,16 @@ export function createUI(
 
   const zoomControls = buildZoomControls();
 
+  // Theme toast (appears top-center when theme changes, informs about light/shadow inversion)
+  const themeToast = document.createElement('div');
+  themeToast.id = 'repsim-theme-toast';
+
   document.body.appendChild(topBar);
   document.body.appendChild(rightPanel);
   document.body.appendChild(toggleBtn);
   document.body.appendChild(focusIndicator);
   document.body.appendChild(toolIndicator);
+  document.body.appendChild(themeToast);
   document.body.appendChild(zoomControls);
 
   // ── Stat references ──
@@ -1123,6 +1151,12 @@ export function createUI(
     themeBtn.innerHTML = currentTheme === 'dark'
       ? '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M21.64 13a1 1 0 00-1.05-.14 8.05 8.05 0 01-3.37.73A8.15 8.15 0 019.08 5.49a8.59 8.59 0 01.25-2 1 1 0 00-1.28-1.18A10 10 0 1021.93 14.12a1 1 0 00-.29-1.12z"/></svg>'
       : '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><circle cx="12" cy="12" r="4"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 5.64l2.12-2.12"/></svg>';
+    // Inform the user that light sources invert between light and shadow in the two themes
+    showThemeToast(
+      currentTheme === 'light'
+        ? 'Light sources now render as shadows'
+        : 'Light sources now render as light',
+    );
   });
 
   // ── Panel toggle ──
@@ -1237,6 +1271,17 @@ export function createUI(
   }) as EventListener);
 
   let focusHideTimer = 0;
+
+  // ── Theme toast helper ──
+  let themeToastTimer = 0;
+  function showThemeToast(message: string): void {
+    themeToast.textContent = message;
+    themeToast.classList.add('visible');
+    clearTimeout(themeToastTimer);
+    themeToastTimer = window.setTimeout(() => {
+      themeToast.classList.remove('visible');
+    }, 3000);
+  }
 
   // ── Config sliders ──
   const configSliders = rightPanel.querySelectorAll<HTMLInputElement>('.config-slider');
