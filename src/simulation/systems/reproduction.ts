@@ -40,6 +40,7 @@ import {
   STRUCTURAL_MUTATION_CHANCE,
   MIN_SEGMENTS,
   MAX_SEGMENTS,
+  MAX_GENE_TURN_ANGLE,
   LENGTH_MUTATION_DRIFT,
   GENE_LENGTH_MIN,
   GENE_LENGTH_MAX,
@@ -466,8 +467,8 @@ function mutateGenome(genome: Genome, mutationRate: number): Genome {
       // ADD: append new gene as child of random existing gene
       mutated = addRandomSegment(mutated);
     } else if (mutated.length > MIN_SEGMENTS) {
-      // REMOVE: remove a random leaf gene
-      mutated = removeRandomLeaf(mutated);
+      // REMOVE: splice out a random non-root segment (children reparent to grandparent)
+      mutated = removeRandomSegment(mutated);
     }
   }
 
@@ -508,48 +509,59 @@ function addRandomSegment(genome: Genome): Genome {
 
 
 /**
- * Remove a random leaf gene from a genome.
+ * Remove a random non-root segment from a genome by splicing it out.
  *
- * A "leaf" is a gene with no children (no other gene has it as parent).
- * The root (index 0) is never removed.
+ * Unlike leaf removal (amputation), this picks any non-root segment and
+ * reparents its children to the removed segment's parent — like removing
+ * a link from a chain and reconnecting the two ends. Long chains can lose
+ * a middle segment without losing all downstream structure.
  *
- * After removal, all parent references that pointed past the removed index
- * are decremented by 1 to maintain correct topology. Since we only remove
- * leaves (genes with no children), no gene has the removed index as its parent.
+ * Each child's angle is combined with the removed segment's angle so it
+ * attaches at approximately the same direction as before, then clamped to
+ * ±MAX_GENE_TURN_ANGLE. The self-intersection check rejects any shape that
+ * becomes invalid after splicing.
  */
-function removeRandomLeaf(genome: Genome): Genome {
-  // Find all leaves (genes that no other gene points to as parent)
-  const hasChildren = new Set<number>();
-  for (let i = 1; i < genome.length; i++) {
-    hasChildren.add(genome[i].parent);
+function removeRandomSegment(genome: Genome): Genome {
+  if (genome.length <= MIN_SEGMENTS) return genome;
+
+  // Pick any non-root segment (indices 1..length-1)
+  const removeIdx = 1 + Math.floor(Math.random() * (genome.length - 1));
+  const removed = genome[removeIdx];
+  const parentIdx = removed.parent; // always < removeIdx (topological order)
+  const removedAngle = removed.angle;
+
+  // Build old-index → new-index map (every slot before removeIdx is unchanged,
+  // every slot after shifts down by 1, removeIdx itself maps to -1 (gone)).
+  const newIndexOf = new Int32Array(genome.length).fill(-1);
+  let ni = 0;
+  for (let i = 0; i < genome.length; i++) {
+    if (i !== removeIdx) newIndexOf[i] = ni++;
   }
 
-  const leaves: number[] = [];
-  for (let i = 1; i < genome.length; i++) { // Skip root (index 0)
-    if (!hasChildren.has(i)) {
-      leaves.push(i);
-    }
-  }
-
-  if (leaves.length === 0) return genome; // No removable leaves
-
-  // Pick a random leaf to remove
-  const removeIdx = leaves[Math.floor(Math.random() * leaves.length)];
-
-  // Build new genome: skip the removed gene, fix parent references
   const result: Genome = [];
   for (let i = 0; i < genome.length; i++) {
     if (i === removeIdx) continue;
 
     const gene: Gene = { ...genome[i] };
 
-    // Adjust parent reference: if it pointed past the removed index, shift down by 1
-    // Note: gene.parent should NEVER === removeIdx because we only remove leaves
-    if (gene.parent > removeIdx) {
-      gene.parent -= 1;
+    if (gene.parent !== -1) { // root keeps parent = -1
+      if (gene.parent === removeIdx) {
+        // Reparent child to the removed segment's parent
+        gene.parent = newIndexOf[parentIdx];
+        // Combine turn angles: child now turns (removedAngle + its own angle) from grandparent
+        const combined = removedAngle + genome[i].angle;
+        gene.angle = Math.max(-MAX_GENE_TURN_ANGLE, Math.min(MAX_GENE_TURN_ANGLE, combined));
+      } else {
+        gene.parent = newIndexOf[gene.parent];
+      }
     }
 
     result.push(gene);
+  }
+
+  // Validate the resulting shape — reject if it self-intersects
+  if (isGenomeSelfIntersecting(result)) {
+    return genome;
   }
 
   return result;

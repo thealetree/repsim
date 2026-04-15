@@ -59,7 +59,9 @@ export function getRootDrain(segCount: number): number {
   return 30 + 8 * segCount;  // f(5)=70, f(2)=46, f(10)=110, f(15)=150
 }
 export function getReproCost(segCount: number): number {
-  return 1000 + 400 * segCount;  // f(5)=3000, f(2)=1800, f(10)=5000, f(15)=7000
+  return 1200 + 50 * segCount;  // f(5)=1450, f(2)=1300, f(10)=1700, f(15)=1950 — nearly flat
+  // Previously 1000+400n (f(15)=7000) which double-penalized large organisms:
+  // metabolic drain already scales with size, so steep repro cost was redundant.
 }
 export function getReproThreshold(segCount: number): number {
   return Math.floor(getMaxReserve(segCount) * 0.92);  // 92% of max — proportional for all sizes
