@@ -695,11 +695,28 @@ export function setupMobileLayout(
     if (!btn) return;
     const tabId = btn.dataset.tab!;
 
+    // If the Scenarios tab is tapped while a scenario is active, dispatch a cancelable
+    // event. scenarios.ts calls preventDefault() to signal it handled the tap
+    // (opening the reference popup). If handled, close the sheet and return.
+    if (tabId === 'scenarios' && btn.hasAttribute('data-scenario-active')) {
+      const ev = new CustomEvent('repsim:scenarios-tab-tapped', { cancelable: true });
+      if (!document.dispatchEvent(ev)) {
+        // scenarios.ts handled it — close sheet if open, don't open accordion
+        if (activeTab === 'scenarios') closeSheet();
+        return;
+      }
+    }
+
     if (activeTab === tabId) {
       closeSheet();
     } else {
       openSheet(tabId);
     }
+  });
+
+  // ── External close-sheet requests (e.g. from scenario start button) ──
+  document.addEventListener('repsim:close-sheet', () => {
+    if (activeTab !== null) closeSheet();
   });
 
   // ── Backdrop click ──

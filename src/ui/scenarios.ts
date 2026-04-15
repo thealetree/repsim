@@ -18,6 +18,7 @@ import type { EventBus } from '../events';
 import type { TankPayload, SimConfig } from '../types';
 import { flushWithoutReseed, applyTankPayload } from './save-share';
 import { seedPopulation } from '../simulation/world';
+import { TANK_GRID_SPACING, CAMERA_MIN_ZOOM, CAMERA_MAX_ZOOM } from '../constants';
 
 
 // ─── Types ───────────────────────────────────────────────────
@@ -246,6 +247,48 @@ export function createScenarioSystem(
   let popupEl: HTMLElement | null = null;
   let badgeEl: HTMLElement | null = null;
 
+  // ── Fit Tank to View ──
+  function fitTankToView(def: ScenarioDef): void {
+    if (!def.tankCells.length) {
+      renderer.recenterView();
+      return;
+    }
+    const gs = TANK_GRID_SPACING;
+    const cols = def.tankCells.map(([c]) => c);
+    const rows = def.tankCells.map(([, r]) => r);
+    const colMin = Math.min(...cols);
+    const colMax = Math.max(...cols);
+    const rowMin = Math.min(...rows);
+    const rowMax = Math.max(...rows);
+
+    // World-space bounding box (each cell spans [col*gs, (col+1)*gs])
+    const xMin = colMin * gs;
+    const xMax = (colMax + 1) * gs;
+    const yMin = rowMin * gs;
+    const yMax = (rowMax + 1) * gs;
+    const cx = (xMin + xMax) / 2;
+    const cy = (yMin + yMax) / 2;
+    const worldW = xMax - xMin;
+    const worldH = yMax - yMin;
+
+    // Available viewport, accounting for top bar (52px) and mobile tab bar (52px)
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const isMobileVp = vw < 768;
+    const availW = vw;
+    const availH = vh - 52 - (isMobileVp ? 52 : 0);
+
+    const PAD = 0.85;
+    const zoom = Math.max(
+      CAMERA_MIN_ZOOM,
+      Math.min(CAMERA_MAX_ZOOM, Math.min((availW * PAD) / worldW, (availH * PAD) / worldH)),
+    );
+
+    renderer.camera.x = cx;
+    renderer.camera.y = cy;
+    renderer.camera.zoom = zoom;
+  }
+
   // ── Load a Scenario ──
   function loadScenario(def: ScenarioDef): void {
     const payload: TankPayload = { v: 1, tank: def.tankCells };
@@ -283,6 +326,9 @@ export function createScenarioSystem(
     // Reset UI + charts
     events.emit('sim:reset', undefined);
     events.emit('chart:clear', undefined);
+
+    // Recenter and zoom to fit the scenario tank in the viewport
+    fitTankToView(def);
   }
 
   // ── Badge Management ──
@@ -291,11 +337,17 @@ export function createScenarioSystem(
     const scenLabel = badgeEl.querySelector<HTMLElement>('.scenario-badge-label')!;
     scenLabel.textContent = SCENARIOS[idx].title;
     badgeEl.style.display = 'flex';
+    // Mark the mobile Scenarios tab as active (dot indicator + tap-to-reference behavior)
+    const tabBtn = document.querySelector('.tab-btn[data-tab="scenarios"]') as HTMLElement | null;
+    if (tabBtn) tabBtn.dataset.scenarioActive = 'true';
   }
 
   function hideBadge(): void {
     if (!badgeEl) return;
     badgeEl.style.display = 'none';
+    // Clear mobile tab active state
+    const tabBtn = document.querySelector('.tab-btn[data-tab="scenarios"]') as HTMLElement | null;
+    if (tabBtn) delete tabBtn.dataset.scenarioActive;
   }
 
   // ── Popup ──
@@ -348,6 +400,8 @@ export function createScenarioSystem(
       loadScenario(def);
       showBadge(idx);
       closePopup();
+      // Close mobile half-sheet if open
+      document.dispatchEvent(new CustomEvent('repsim:close-sheet'));
     });
 
     // Animate in
@@ -414,20 +468,22 @@ export function createScenarioSystem(
   }
 
   function positionPopup(el: HTMLElement): void {
-    // Measure after display (display:flex but invisible)
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const isMobileViewport = vw < 768;
-    const tabBarH = isMobileViewport ? 52 : 0;
+
+    if (isMobileViewport) {
+      // On mobile, CSS media query pins the popup between the top bar and tab bar
+      // via top/bottom !important overrides — no inline positioning needed.
+      return;
+    }
+
+    // Desktop: center the popup
     const maxW = Math.min(480, vw - 48);
     el.style.maxWidth = `${maxW}px`;
-
-    // Horizontal: centered
     const left = Math.max(12, (vw - maxW) / 2);
     el.style.left = `${left}px`;
-
-    // Vertical: center in the usable area (between top bar and tab bar)
-    const usableH = vh - 52 - tabBarH;
+    const usableH = vh - 52;
     const estimatedH = Math.min(usableH * 0.85, 600);
     const top = Math.max(52, 52 + (usableH - estimatedH) / 2);
     el.style.top = `${top}px`;
@@ -506,6 +562,16 @@ export function createScenarioSystem(
 
     return badge;
   }
+
+  // ── Mobile Integration ──
+  // When the mobile Scenarios tab is tapped while a scenario is active,
+  // open the reference popup instead of the accordion sheet.
+  document.addEventListener('repsim:scenarios-tab-tapped', (e: Event) => {
+    if (activeIdx >= 0) {
+      e.preventDefault(); // Signals to mobile-layout.ts that we handled it
+      openReference(activeIdx);
+    }
+  });
 
   // ── Insert into DOM ──
   // Insert scenarios accordion between Simulation and Save & Share sections
@@ -682,7 +748,9 @@ export function injectScenarioStyles(): void {
 
     .scenario-popup-body {
       flex: 1;
+      min-height: 0; /* iOS Safari: allow flex child to shrink below content height */
       overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
       padding: 16px 20px;
       font-size: 12px;
       line-height: 1.65;
@@ -812,20 +880,42 @@ export function injectScenarioStyles(): void {
       margin-left: auto;
     }
 
-    /* Mobile: don't show badge text on small screens */
+    /* Mobile: show a shorter badge label on small screens */
     @media (max-width: 480px) {
-      .scenario-badge-label { display: none; }
+      .scenario-badge-label {
+        max-width: 72px;
+      }
     }
 
-    /* Mobile: full-width popup above the bottom tab bar */
+    /* Mobile: full-width popup pinned between top bar and tab bar */
     @media (max-width: 767px) {
       .scenario-popup {
         left: 12px !important;
         right: 12px !important;
         max-width: none !important;
-        /* Ensure it doesn't extend behind the 52px tab bar */
-        max-height: calc(100vh - 104px) !important;
+        /* Pin to top bar (52px) and bottom tab bar (52px) with small gaps */
+        top: 56px !important;
+        bottom: 56px !important;
+        max-height: none !important;
+        /* height is fully defined by top + bottom */
       }
+    }
+
+    /* Mobile Scenarios tab: active dot indicator */
+    .tab-btn[data-tab="scenarios"][data-scenario-active] {
+      position: relative;
+      color: var(--ui-accent);
+    }
+    .tab-btn[data-tab="scenarios"][data-scenario-active]::after {
+      content: '';
+      position: absolute;
+      top: 4px;
+      right: 6px;
+      width: 6px;
+      height: 6px;
+      background: var(--ui-accent);
+      border-radius: 50%;
+      border: 1.5px solid var(--ui-bg-solid);
     }
   `;
   document.head.appendChild(style);
