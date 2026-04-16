@@ -21,7 +21,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   virusVirulence: 0.5,   // Base virulence multiplier
   virusTransmission: 0.5, // Base transmission multiplier
   virusImmunityTime: 50,  // Seconds to develop immunity
-  greenFeed: 180,         // HP per photosynthesis tick — balanced against root drain of 70
+  greenFeed: 240,         // HP per photosynthesis tick — balanced against root drain of 70
   blueHP: 600,            // Extra HP per blue segment length unit (was 1000 — too dominant)
   yellowFreq: 1.25,       // Seconds between movement — not too twitchy, not too sluggish
   redDamage: 400,         // Damage per attack — kills a normal segment in ~2.5 hits

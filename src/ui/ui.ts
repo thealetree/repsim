@@ -46,7 +46,7 @@ interface SliderDef {
 const CONFIG_SLIDERS: SliderDef[] = [
   { key: 'repCount', label: 'Start Pop', min: 10, max: 490, step: 10 },      // default 250 — midpoint 250 ✓
   { key: 'repLimit', label: 'Pop Limit', min: 50, max: 1950, step: 50 },    // default 1000 — midpoint 1000 ✓
-  { key: 'greenFeed', label: 'Sun Feed', min: 45, max: 315, step: 15 },     // default 180 — midpoint 180 ✓
+  { key: 'greenFeed', label: 'Sun Feed', min: 60, max: 420, step: 15 },     // default 240 — midpoint 240 ✓
   { key: 'blueHP', label: 'Blue HP', min: 150, max: 1050, step: 50 },       // default 600 — midpoint 600 ✓
   { key: 'yellowFreq', label: 'Speed', min: 0.25, max: 2.25, step: 0.25, invert: true }, // default 1.25 — midpoint 1.25 ✓; invert so + = faster
   { key: 'redDamage', label: 'Attack', min: 50, max: 750, step: 50 },       // default 400 — midpoint 400 ✓
@@ -869,7 +869,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.10.1</div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.10.2</div>
   `;
 
   // Virus section
