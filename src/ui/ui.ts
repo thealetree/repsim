@@ -427,6 +427,39 @@ function injectStyles(): void {
       background: var(--ui-surface-hover);
     }
 
+    /* ── Red Target Toggles ── */
+    .red-targets-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid var(--ui-border);
+    }
+    .red-targets-label {
+      font-size: 11px;
+      color: var(--ui-text-dim);
+      min-width: 52px;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .red-target-btns {
+      display: flex;
+      gap: 3px;
+      flex-wrap: wrap;
+    }
+    .red-target-btn {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.12s ease;
+      padding: 0;
+    }
+    .red-target-btn:hover {
+      filter: brightness(1.3);
+    }
+
     /* ── Organism Info ── */
     #repsim-org-info {
       font-size: 12px;
@@ -847,6 +880,18 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
   }
   slidersContent += `<button class="restore-defaults-btn" id="restore-defaults">Restore Defaults</button>`;
 
+  // Red attack target toggles
+  const redTargetColorLabels = ['Green', 'Blue', 'Yellow', 'Red', 'Purple', 'White'];
+  let redTargetsHTML = `<div class="red-targets-row"><span class="red-targets-label">Red targets</span><div class="red-target-btns">`;
+  for (let c = 0; c < 6; c++) {
+    const colorHex = hexToCSS(SEGMENT_RENDER_COLORS[c]);
+    const on = engine.config.redTargets[c] !== false;
+    redTargetsHTML += `<button class="red-target-btn${on ? ' active' : ''}" data-color="${c}" title="${redTargetColorLabels[c]}"
+      style="background:${on ? colorHex + '55' : 'transparent'};border:1.5px solid ${on ? colorHex : 'rgba(255,255,255,0.15)'};opacity:${on ? '1' : '0.4'}"></button>`;
+  }
+  redTargetsHTML += `</div></div>`;
+  slidersContent += redTargetsHTML;
+
   // Organism info
   const orgContent = `<div id="repsim-org-info"><span class="org-placeholder">Click an organism to inspect</span></div>`;
 
@@ -869,7 +914,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.10.4</div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.10.5</div>
   `;
 
   // Virus section
@@ -1378,8 +1423,32 @@ export function createUI(
           }
         }
       });
+      // Reset red targets to all-enabled
+      engine.config.redTargets = [true, true, true, true, true, true];
+      redTargetBtns.forEach((btn) => updateRedTargetBtn(btn, true));
     });
   }
+
+  // ── Red target toggles ──
+  const redTargetBtns = rightPanel.querySelectorAll<HTMLButtonElement>('.red-target-btn');
+  const redTargetColorHexes = Object.values(SEGMENT_RENDER_COLORS).map(hexToCSS);
+
+  function updateRedTargetBtn(btn: HTMLButtonElement, on: boolean): void {
+    const c = Number(btn.dataset.color);
+    const colorHex = redTargetColorHexes[c];
+    btn.style.background = on ? colorHex + '55' : 'transparent';
+    btn.style.border = `1.5px solid ${on ? colorHex : 'rgba(255,255,255,0.15)'}`;
+    btn.style.opacity = on ? '1' : '0.4';
+    btn.classList.toggle('active', on);
+  }
+
+  redTargetBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const c = Number(btn.dataset.color);
+      engine.config.redTargets[c] = !engine.config.redTargets[c];
+      updateRedTargetBtn(btn, engine.config.redTargets[c]);
+    });
+  });
 
   // ── Virus controls ──
   const virusCheckbox = document.getElementById('virus-enabled') as HTMLInputElement;
@@ -1471,6 +1540,12 @@ export function createUI(
     virusSliders.forEach((slider) => {
       const vkey = slider.dataset.vkey! as keyof typeof engine.config;
       slider.value = String(engine.config[vkey]);
+    });
+
+    // Red target toggles
+    redTargetBtns.forEach((btn) => {
+      const c = Number(btn.dataset.color);
+      updateRedTargetBtn(btn, engine.config.redTargets[c]);
     });
   });
 

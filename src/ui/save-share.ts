@@ -224,9 +224,14 @@ function serializeTank(
     const cfg: Partial<SimConfig> = {};
     const current = engine.config;
     for (const key of Object.keys(DEFAULT_CONFIG) as (keyof SimConfig)[]) {
+      if (key === 'redTargets') continue; // handled separately below (array ref comparison is always unequal)
       if (current[key] !== DEFAULT_CONFIG[key]) {
         (cfg as Record<string, unknown>)[key] = current[key];
       }
+    }
+    // Include redTargets only if non-default (any color disabled)
+    if (current.redTargets.some(t => !t)) {
+      cfg.redTargets = [...current.redTargets];
     }
     if (Object.keys(cfg).length > 0) payload.config = cfg;
 

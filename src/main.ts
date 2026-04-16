@@ -40,7 +40,7 @@ async function main(): Promise<void> {
 
   // ── 2. Simulation Engine ──
   // Creates the world, seeds organisms, runs physics at fixed timestep
-  const config = { ...DEFAULT_CONFIG };
+  const config = { ...DEFAULT_CONFIG, redTargets: [...DEFAULT_CONFIG.redTargets] };
   const engine = createSimulationEngine(events, config);
   console.log(`🔬 World created: ${config.repCount} organisms seeded`);
 

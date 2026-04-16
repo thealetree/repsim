@@ -425,6 +425,28 @@ function runRedAttack(world: World, config: SimConfig): void {
   const count = world.segmentCount;
   // Depth layers already computed at start of runBehaviors via computeDepthLayers()
 
+  // Precompute enabled target color bitmask from config.redTargets
+  let enabledColorsMask = 0;
+  for (let c = 0; c < config.redTargets.length; c++) {
+    if (config.redTargets[c]) enabledColorsMask |= (1 << c);
+  }
+  const allTargetsEnabled = enabledColorsMask === 0b111111; // fast-path: skip filter entirely
+
+  // If not all colors enabled, build per-org color presence bitmask (orgId → colorMask).
+  // Used in inner loop to skip targets with no enabled colors — O(segments) once per tick.
+  const orgColorMap = new Map<number, number>();
+  if (!allTargetsEnabled) {
+    for (const org of world.organisms.values()) {
+      if (!org.alive) continue;
+      let mask = 0;
+      for (let i = 0; i < org.segmentCount; i++) {
+        const idx = org.firstSegment + i;
+        if (seg.alive[idx]) mask |= (1 << seg.color[idx]);
+      }
+      orgColorMap.set(org.id, mask);
+    }
+  }
+
   // Build spatial hash of all alive segments (for proximity queries)
   clearSpatialHash(attackSpatialHash);
   for (let i = 0; i < count; i++) {
@@ -463,6 +485,12 @@ function runRedAttack(world: World, config: SimConfig): void {
 
         // Skip self (same organism)
         if (seg.organismId[j] === org.id) continue;
+
+        // Red target filter: skip target org if it has no segments of an enabled color
+        if (!allTargetsEnabled) {
+          const targetMask = orgColorMap.get(seg.organismId[j]) ?? 0;
+          if ((targetMask & enabledColorsMask) === 0) continue;
+        }
 
         // Skip different depth layers
         const targetLayer = _orgDepthLayer.get(seg.organismId[j]);
