@@ -42,16 +42,18 @@ interface SliderDef {
 }
 
 // Ranges are centered on DEFAULT_CONFIG values so the default sits at slider midpoint.
+// Formula: min + max = 2 × default. Verified midpoints listed in comments.
 const CONFIG_SLIDERS: SliderDef[] = [
-  { key: 'repCount', label: 'Start Pop', min: 10, max: 1000, step: 10 },    // default 100 — max matches Pop Limit
-  { key: 'repLimit', label: 'Pop Limit', min: 50, max: 1000, step: 50 },   // default 500
-  { key: 'blueHP', label: 'Blue HP', min: 100, max: 1900, step: 100 },      // default 1000
-  { key: 'yellowFreq', label: 'Speed', min: 0.25, max: 2.25, step: 0.25, invert: true }, // default 1.25; invert so + = faster
-  { key: 'redDamage', label: 'Attack', min: 50, max: 750, step: 50 },      // default 400
-  { key: 'purpleCost', label: 'Mate Cost', min: 500, max: 6500, step: 250 }, // default 3500
-  { key: 'asexMutationRate', label: 'Mutate %', min: 0, max: 2, step: 0.1, unit: '%' }, // default 1
-  { key: 'sexMutationRate', label: 'Sex Mut %', min: 0, max: 4, step: 0.1, unit: '%' }, // default 2
-  { key: 'sexGeneComboRate', label: 'Gene Mix %', min: 0, max: 30, step: 1, unit: '%' }, // default 15
+  { key: 'repCount', label: 'Start Pop', min: 10, max: 490, step: 10 },      // default 250 — midpoint 250 ✓
+  { key: 'repLimit', label: 'Pop Limit', min: 50, max: 1950, step: 50 },    // default 1000 — midpoint 1000 ✓
+  { key: 'greenFeed', label: 'Sun Feed', min: 45, max: 315, step: 15 },     // default 180 — midpoint 180 ✓
+  { key: 'blueHP', label: 'Blue HP', min: 150, max: 1050, step: 50 },       // default 600 — midpoint 600 ✓
+  { key: 'yellowFreq', label: 'Speed', min: 0.25, max: 2.25, step: 0.25, invert: true }, // default 1.25 — midpoint 1.25 ✓; invert so + = faster
+  { key: 'redDamage', label: 'Attack', min: 50, max: 750, step: 50 },       // default 400 — midpoint 400 ✓
+  { key: 'purpleCost', label: 'Mate Cost', min: 250, max: 1750, step: 50 }, // default 1000 — midpoint 1000 ✓
+  { key: 'asexMutationRate', label: 'Mutate %', min: 0, max: 2, step: 0.1, unit: '%' }, // default 1 — midpoint 1 ✓
+  { key: 'sexMutationRate', label: 'Sex Mut %', min: 0, max: 4, step: 0.1, unit: '%' }, // default 2 — midpoint 2 ✓
+  { key: 'sexGeneComboRate', label: 'Gene Mix %', min: 0, max: 30, step: 1, unit: '%' }, // default 15 — midpoint 15 ✓
 ];
 
 // ─── CSS Styles ──────────────────────────────────────────────
@@ -769,6 +771,7 @@ function buildTopBar(): HTMLElement {
         <span class="stat-item">Deaths<span class="stat-value" id="stat-deaths">0</span></span>
         <span class="stat-item" id="stat-time-wrap">&#9201;<span class="stat-value" id="stat-time">0:00</span></span>
       </div>
+      <button class="ui-btn-icon" id="repsim-copy-stats" title="Copy stats to clipboard" style="font-size:13px;padding:3px 5px">&#128203;</button>
       <div class="top-divider"></div>
       <div id="repsim-tool-icons">
         <button class="tool-icon active" data-tool="0" title="Select">
@@ -866,7 +869,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.10.0</div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.10.1</div>
   `;
 
   // Virus section
@@ -1047,6 +1050,53 @@ export function createUI(
     statBirths.textContent = String(stats.births);
     statDeaths.textContent = String(stats.deaths);
     statTime.textContent = ticksToTime(stats.tick);
+  });
+
+  // ── Copy Stats button ──
+  const copyStatsBtn = document.getElementById('repsim-copy-stats')!;
+  copyStatsBtn.addEventListener('click', () => {
+    const world = engine.world;
+    const COLOR_LABELS = ['Green', 'Blue', 'Yellow', 'Red', 'Purple', 'White'];
+    const colorCounts = [0, 0, 0, 0, 0, 0];
+    let genSum = 0, maxGen = 0, orgCount = 0;
+    const speciesSet = new Set<string>();
+
+    for (const org of world.organisms.values()) {
+      if (!org.alive) continue;
+      orgCount++;
+      genSum += org.generation;
+      if (org.generation > maxGen) maxGen = org.generation;
+      speciesSet.add(org.fingerprint);
+      for (let i = 0; i < org.segmentCount; i++) {
+        const idx = org.firstSegment + i;
+        if (world.segments.alive[idx]) {
+          const c = world.segments.color[idx];
+          if (c >= 0 && c < 6) colorCounts[c]++;
+        }
+      }
+    }
+
+    const timeStr = ticksToTime(world.tick);
+    const avgGen = orgCount > 0 ? (genSum / orgCount).toFixed(1) : '0';
+    const lines = [
+      `=== Repsim Stats @ ${timeStr} ===`,
+      `Population: ${world.stats.population}  |  Births: ${world.stats.births}  |  Deaths: ${world.stats.deaths}`,
+      `Species: ${speciesSet.size}  |  Generation: avg ${avgGen}  max ${maxGen}`,
+      ``,
+      `Segments by color:`,
+      ...COLOR_LABELS.map((name, i) => `  ${name}: ${colorCounts[i]}`),
+    ];
+    const text = lines.join('\n');
+
+    navigator.clipboard.writeText(text).then(() => {
+      const prev = copyStatsBtn.textContent;
+      copyStatsBtn.textContent = '✓';
+      copyStatsBtn.style.color = 'var(--ui-accent)';
+      setTimeout(() => {
+        copyStatsBtn.textContent = prev ?? '📋';
+        copyStatsBtn.style.color = '';
+      }, 1200);
+    }).catch(() => { /* clipboard denied */ });
   });
 
   // ── Speed controls ──
