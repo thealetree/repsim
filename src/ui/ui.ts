@@ -772,6 +772,19 @@ function hexToCSS(hex: number): string {
   return '#' + hex.toString(16).padStart(6, '0');
 }
 
+// Desaturated + darkened variant of a "#RRGGBB" color, for disabled toggle states.
+function muteColor(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  const desat = 0.65;
+  const darken = 0.55;
+  const mix = (ch: number) => Math.round((ch * (1 - desat) + lum * desat) * darken);
+  const toHex = (n: number) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0');
+  return '#' + toHex(mix(r)) + toHex(mix(g)) + toHex(mix(b));
+}
+
 // ─── Accordion section builder ────────────────────────────────
 function buildSection(title: string, id: string, content: string, startOpen = true): string {
   const collapsedClass = startOpen ? '' : ' collapsed';
@@ -885,9 +898,10 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
   let redTargetsHTML = `<div class="red-targets-row"><span class="red-targets-label">Red targets</span><div class="red-target-btns">`;
   for (let c = 0; c < 6; c++) {
     const colorHex = hexToCSS(SEGMENT_RENDER_COLORS[c]);
+    const mutedHex = muteColor(colorHex);
     const on = engine.config.redTargets[c] !== false;
     redTargetsHTML += `<button class="red-target-btn${on ? ' active' : ''}" data-color="${c}" title="${redTargetColorLabels[c]}"
-      style="background:${on ? colorHex + '55' : 'transparent'};border:1.5px solid ${on ? colorHex : 'rgba(255,255,255,0.15)'};opacity:${on ? '1' : '0.4'}"></button>`;
+      style="background:${on ? colorHex + '55' : mutedHex + '55'};border:1.5px solid ${on ? colorHex : mutedHex};opacity:1"></button>`;
   }
   redTargetsHTML += `</div></div>`;
   slidersContent += redTargetsHTML;
@@ -1436,9 +1450,10 @@ export function createUI(
   function updateRedTargetBtn(btn: HTMLButtonElement, on: boolean): void {
     const c = Number(btn.dataset.color);
     const colorHex = redTargetColorHexes[c];
-    btn.style.background = on ? colorHex + '55' : 'transparent';
-    btn.style.border = `1.5px solid ${on ? colorHex : 'rgba(255,255,255,0.15)'}`;
-    btn.style.opacity = on ? '1' : '0.4';
+    const mutedHex = muteColor(colorHex);
+    btn.style.background = (on ? colorHex : mutedHex) + '55';
+    btn.style.border = `1.5px solid ${on ? colorHex : mutedHex}`;
+    btn.style.opacity = '1';
     btn.classList.toggle('active', on);
   }
 
