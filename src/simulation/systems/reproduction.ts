@@ -118,6 +118,10 @@ export function runReproduction(world: World, config: SimConfig): void {
     if (org.reproMeter < REPRO_METER_MAX) continue;
     if (org.id % 10 !== tickBucket) continue; // Only this tick's 1/10th bucket
 
+    // Energy income gate: organism must have at least one energy-producing color.
+    // Pure blue/yellow organisms have no energy source and cannot reproduce.
+    if (!org.hasGreen && !org.hasWhite && !org.hasRed) continue;
+
     if (org.hasBlack) {
       readySexual.push(org);
     } else {

@@ -233,6 +233,14 @@ export interface Organism {
   // Used to skip Brownian rotation (yellow organisms rotate from thrust)
   hasYellow: boolean;
 
+  // Quick flag: does this organism have at least one green segment?
+  // Used to gate reproduction — organisms with no energy-producing colors cannot reproduce.
+  hasGreen: boolean;
+
+  // Quick flag: does this organism have at least one red segment?
+  // Used to gate reproduction — red organisms can sustain themselves via predation.
+  hasRed: boolean;
+
   // Set of strain IDs this organism is immune to (survives infection → gains immunity)
   immuneTo: Set<number>;
 

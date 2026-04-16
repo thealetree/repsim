@@ -534,10 +534,12 @@ export function spawnOrganismFromGenome(
     return null; // World is full
   }
 
-  // Check if this organism has any black/white segments (quick flags)
+  // Check if this organism has any black/white/yellow/green/red segments (quick flags)
   const hasBlack = genome.some(g => g.color === SegmentColor.Black);
   const hasWhite = genome.some(g => g.color === SegmentColor.White);
   const hasYellow = genome.some(g => g.color === SegmentColor.Yellow);
+  const hasGreen = genome.some(g => g.color === SegmentColor.Green);
+  const hasRed = genome.some(g => g.color === SegmentColor.Red);
 
   // Build tree topology (cached for constraints/rendering)
   const topology = buildGenomeTopology(genome);
@@ -572,6 +574,8 @@ export function spawnOrganismFromGenome(
     hasBlack,
     hasWhite,
     hasYellow,
+    hasGreen,
+    hasRed,
     immuneTo: new Set(),
     virusInfectionCount: 0,
     parentId,
