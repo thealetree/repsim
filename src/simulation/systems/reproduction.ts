@@ -88,16 +88,17 @@ export function runReproduction(world: World, config: SimConfig): void {
   // Below that, reproduction probability decreases smoothly as population approaches
   // repLimit — allowing emergent boom/bust cycles rather than a hard cliff.
   //
-  //   pop < 80% repLimit  → full probability (no throttle)
+  //   pop < 95% repLimit  → full probability (no throttle)
   //   pop = 100% repLimit → ~4% probability  (steep quadratic drop)
   //   pop ≥ 125% repLimit → hard blocked      (performance safety valve)
   const pop = world.stats.population;
   const hardCeiling = Math.floor(config.repLimit * 1.25);
   if (pop >= hardCeiling) return;
 
-  if (pop > config.repLimit * 0.8) {
-    // excessRatio: 0 at 80%, 1 at 100% (full repLimit), >1 beyond cap
-    const excessRatio = (pop - config.repLimit * 0.8) / (config.repLimit * 0.2);
+  if (pop > config.repLimit * 0.95) {
+    // excessRatio: 0 at 95%, 1 at 100% (full repLimit), >1 beyond cap
+    // Smaller window (5% vs old 20%) → steeper cliff → sharper overshoot/crash cycles
+    const excessRatio = (pop - config.repLimit * 0.95) / (config.repLimit * 0.05);
     // Quadratic drop: 1.0 at ratio=0, ~0.04 at ratio=1, 0 beyond ~1.02
     const reproProb = Math.max(0, 1 - excessRatio * excessRatio * 0.96);
     if (Math.random() > reproProb) return;

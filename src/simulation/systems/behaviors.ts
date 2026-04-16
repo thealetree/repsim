@@ -45,7 +45,6 @@ import {
   MAX_ADJACENT_DEPTH_DIFF,
   FOOD_ENERGY_PER_SEGMENT,
   FOOD_SCAVENGE_RANGE,
-  FOOD_RED_EFFICIENCY,
   FOOD_WHITE_EFFICIENCY,
   FOOD_SCAVENGE_INTERVAL_TICKS,
   FOOD_MAX_PARTICLES,
@@ -514,8 +513,10 @@ function runRedAttack(world: World, config: SimConfig): void {
 /**
  * Segments eat nearby food particles dropped by dead organisms.
  *
- * If an organism has ANY white segment, then ALL its segments can eat food
- * (white scavenger efficiency). Otherwise, only Red segments eat (red efficiency).
+ * Only organisms with at least one white segment can scavenge food.
+ * If the organism has ANY white segment, ALL its segments can eat food
+ * at white scavenger efficiency. Red segments do NOT eat food — red gains
+ * energy exclusively from attacking living organisms.
  *
  * Viral food: eating a viral food particle grants energy normally but also
  * creates a spontaneous virus strain and infects the eating segment.
@@ -542,19 +543,14 @@ function runScavenging(world: World, config: SimConfig): void {
   for (const org of world.organisms.values()) {
     if (!org.alive) continue;
 
-    // Determine scavenging eligibility:
-    // - hasWhite: any segment can eat food at white efficiency
-    // - else: only Red segments can eat at red efficiency
-    const orgCanEat = org.hasWhite;
-    const orgEfficiency = org.hasWhite ? FOOD_WHITE_EFFICIENCY : FOOD_RED_EFFICIENCY;
+    // Only white-bearing organisms can scavenge food particles.
+    // Red segments gain energy exclusively from attacking living organisms.
+    if (!org.hasWhite) continue;
+    const orgEfficiency = FOOD_WHITE_EFFICIENCY;
 
     for (let i = 0; i < org.segmentCount; i++) {
       const idx = org.firstSegment + i;
       if (!seg.alive[idx]) continue;
-
-      // Check if this segment can eat
-      const color = seg.color[idx];
-      if (!orgCanEat && color !== SegmentColor.Red) continue;
 
       // Query food spatial hash
       const nearbyLen = querySpatialHash(foodSpatialHash, seg.x[idx], seg.y[idx]);

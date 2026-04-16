@@ -869,7 +869,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.10.3</div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.10.4</div>
   `;
 
   // Virus section
