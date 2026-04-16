@@ -33,6 +33,8 @@
 
 import type { World, Organism, Genome, Gene, SimConfig } from '../../types';
 import { SegmentColor, VirusEffect } from '../../types';
+import type { SpatialHash } from '../spatial-hash';
+import { querySpatialHash } from '../spatial-hash';
 import {
   REPRO_METER_MAX,
   getReproCost,
@@ -82,7 +84,7 @@ const SEXUAL_REPRO_RANGE_SQ = SEXUAL_REPRO_RANGE * SEXUAL_REPRO_RANGE;
  * 4. Process sexual births (find mate pairs with black segments)
  * 5. Respect population cap — stop birthing when full
  */
-export function runReproduction(world: World, config: SimConfig): void {
+export function runReproduction(world: World, config: SimConfig, segmentSpatialHash?: SpatialHash): void {
   // ── Population cap: soft cap + hard safety ceiling ──
   // Hard ceiling at 1.25× repLimit is a safety valve to prevent FPS degradation.
   // Below that, reproduction probability decreases smoothly as population approaches
@@ -146,7 +148,7 @@ export function runReproduction(world: World, config: SimConfig): void {
     if (world.stats.population >= hardCeiling) break;
 
     // Find a nearby mate (also has black, also ready, same depth layer)
-    const mate = findMate(world, org, readySexual, mated);
+    const mate = findMate(world, org, readySexual, mated, segmentSpatialHash);
     if (mate) {
       mated.add(org.id);
       mated.add(mate.id);
@@ -335,6 +337,7 @@ function findMate(
   org: Organism,
   candidates: Organism[],
   mated: Set<number>,
+  segmentSpatialHash?: SpatialHash,
 ): Organism | null {
   const seg = world.segments;
   const orgLayer = getDepthLayer(org.depth);
@@ -345,24 +348,61 @@ function findMate(
   let bestMate: Organism | null = null;
   let bestDistSq = SEXUAL_REPRO_RANGE_SQ;
 
-  for (const candidate of candidates) {
-    if (candidate.id === org.id) continue;
-    if (!candidate.alive) continue;
-    if (mated.has(candidate.id)) continue;
+  if (segmentSpatialHash && segmentSpatialHash.cells.size > 0) {
+    // Spatial hash path: query nearby segments, resolve directly to organisms.
+    // Skips iterating the full candidates array — only touches organisms with
+    // at least one segment near org's root position.
+    const nearbyLen = querySpatialHash(segmentSpatialHash, ox, oy);
+    const checkedOrgIds = new Set<number>();
+    const tickBucket = world.tick % 10;
 
-    // Must be on the same or adjacent depth layer (±1 layer)
-    const candidateLayer = getDepthLayer(candidate.depth);
-    if (Math.abs(candidateLayer - orgLayer) > 1) continue;
+    for (let n = 0; n < nearbyLen; n++) {
+      const segIdx = segmentSpatialHash.queryBuf[n];
+      const candidateOrgId = seg.organismId[segIdx];
 
-    // Root-to-root distance check
-    const cRootIdx = candidate.firstSegment;
-    const dx = seg.x[cRootIdx] - ox;
-    const dy = seg.y[cRootIdx] - oy;
-    const distSq = dx * dx + dy * dy;
+      if (candidateOrgId === org.id) continue;
+      if (checkedOrgIds.has(candidateOrgId)) continue;
+      checkedOrgIds.add(candidateOrgId);
+      if (mated.has(candidateOrgId)) continue;
 
-    if (distSq < bestDistSq) {
-      bestDistSq = distSq;
-      bestMate = candidate;
+      const candidate = world.organisms.get(candidateOrgId);
+      if (!candidate || !candidate.alive) continue;
+      if (!candidate.hasBlack) continue;
+      if (candidate.reproMeter < REPRO_METER_MAX) continue;
+      if (candidate.id % 10 !== tickBucket) continue;
+
+      const candidateLayer = getDepthLayer(candidate.depth);
+      if (Math.abs(candidateLayer - orgLayer) > 1) continue;
+
+      const cRootIdx = candidate.firstSegment;
+      const dx = seg.x[cRootIdx] - ox;
+      const dy = seg.y[cRootIdx] - oy;
+      const distSq = dx * dx + dy * dy;
+
+      if (distSq < bestDistSq) {
+        bestDistSq = distSq;
+        bestMate = candidate;
+      }
+    }
+  } else {
+    // Fallback: linear scan (first tick or hash unavailable)
+    for (const candidate of candidates) {
+      if (candidate.id === org.id) continue;
+      if (!candidate.alive) continue;
+      if (mated.has(candidate.id)) continue;
+
+      const candidateLayer = getDepthLayer(candidate.depth);
+      if (Math.abs(candidateLayer - orgLayer) > 1) continue;
+
+      const cRootIdx = candidate.firstSegment;
+      const dx = seg.x[cRootIdx] - ox;
+      const dy = seg.y[cRootIdx] - oy;
+      const distSq = dx * dx + dy * dy;
+
+      if (distSq < bestDistSq) {
+        bestDistSq = distSq;
+        bestMate = candidate;
+      }
     }
   }
 

@@ -131,12 +131,14 @@ export interface SegmentArrays {
   prevX: Float32Array;
   prevY: Float32Array;
 
-  // Render-time previous positions — snapshotted at the START of each sim tick.
-  // The renderer lerps between renderPrevX/Y (start of tick) and x/y (end of tick)
-  // using getAlpha(), so every rendered frame gets a smoothly interpolated position
-  // even when no new tick has occurred (e.g. 3 render frames per 1 tick at 1x speed).
-  renderPrevX: Float32Array;
-  renderPrevY: Float32Array;
+  // Double-buffered render positions — two snapshots of world-space x/y.
+  // The engine alternates between renderX[0] and renderX[1] each tick batch:
+  //   renderBufCurrent (on World) is flipped before each batch (O(1) flag swap).
+  //   After all ticks, seg.x is copied into renderX[renderBufCurrent].
+  // Renderer lerps renderX[1-renderBufCurrent] → renderX[renderBufCurrent] using alpha,
+  // giving smooth sub-tick interpolation without a per-frame pre-tick copy.
+  renderX: [Float32Array, Float32Array];
+  renderY: [Float32Array, Float32Array];
 
   // Health per segment (starts at 1000; blue segments get bonus)
   health: Float32Array;
@@ -323,6 +325,11 @@ export interface World {
 
   // Current simulation tick (increments by 1 each sim step)
   tick: number;
+
+  // Double-buffer render index (0 or 1). Flipped each tick batch by the engine.
+  // renderX[renderBufCurrent] = most recent post-batch positions (render "current").
+  // renderX[1 - renderBufCurrent] = previous batch positions (render "prev").
+  renderBufCurrent: number;
 
   // Running statistics
   stats: {

@@ -301,6 +301,7 @@ export function createWorld(config: SimConfig = DEFAULT_CONFIG): World {
     food: createFoodParticles(),
     virusStrains: createVirusStrainPool(),
     isLightTheme: false,
+    renderBufCurrent: 0,
   };
 
   initDefaultTankCells(world);
@@ -318,8 +319,8 @@ function createSegmentArrays(maxSegments: number): SegmentArrays {
     y: new Float32Array(maxSegments),
     prevX: new Float32Array(maxSegments),
     prevY: new Float32Array(maxSegments),
-    renderPrevX: new Float32Array(maxSegments),
-    renderPrevY: new Float32Array(maxSegments),
+    renderX: [new Float32Array(maxSegments), new Float32Array(maxSegments)],
+    renderY: [new Float32Array(maxSegments), new Float32Array(maxSegments)],
     health: new Float32Array(maxSegments),
     color: new Uint8Array(maxSegments),
     organismId: new Uint32Array(maxSegments),
@@ -606,8 +607,11 @@ export function spawnOrganismFromGenome(
   seg.y[rootIdx] = spawnY;
   seg.prevX[rootIdx] = spawnX; // No initial velocity
   seg.prevY[rootIdx] = spawnY;
-  seg.renderPrevX[rootIdx] = spawnX; // Match spawn position so first-frame lerp is correct
-  seg.renderPrevY[rootIdx] = spawnY;
+  // Initialize both render buffers to spawn position so first-frame lerp shows no movement
+  seg.renderX[0][rootIdx] = spawnX;
+  seg.renderX[1][rootIdx] = spawnX;
+  seg.renderY[0][rootIdx] = spawnY;
+  seg.renderY[1][rootIdx] = spawnY;
   seg.health[rootIdx] = SEGMENT_BASE_HEALTH
     + (genome[0].color === SegmentColor.Blue ? genome[0].length * config.blueHP : 0);
   seg.color[rootIdx] = genome[0].color;
@@ -641,8 +645,11 @@ export function spawnOrganismFromGenome(
     seg.y[myGlobalIdx] = seg.y[parentGlobalIdx] + Math.sin(outAngle) * chainDist;
     seg.prevX[myGlobalIdx] = seg.x[myGlobalIdx]; // No initial velocity
     seg.prevY[myGlobalIdx] = seg.y[myGlobalIdx];
-    seg.renderPrevX[myGlobalIdx] = seg.x[myGlobalIdx]; // Match spawn position
-    seg.renderPrevY[myGlobalIdx] = seg.y[myGlobalIdx];
+    // Initialize both render buffers to spawn position
+    seg.renderX[0][myGlobalIdx] = seg.x[myGlobalIdx];
+    seg.renderX[1][myGlobalIdx] = seg.x[myGlobalIdx];
+    seg.renderY[0][myGlobalIdx] = seg.y[myGlobalIdx];
+    seg.renderY[1][myGlobalIdx] = seg.y[myGlobalIdx];
 
     // Health: base + blue bonus (scaled by length)
     seg.health[myGlobalIdx] = SEGMENT_BASE_HEALTH

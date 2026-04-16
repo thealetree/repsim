@@ -114,16 +114,13 @@ export function createSimulationEngine(
       const TICK_BUDGET_MS = 13;
       const budgetStart = performance.now();
 
-      // Snapshot render-interpolation positions ONCE per frame, before the tick
-      // batch, so interpolation lerps from "start of frame" to "after all ticks."
-      // Snapshotting inside the loop causes a mismatch at high speeds (8x): renderPrev
-      // ends up only one tick behind x/y, but alpha spans the whole frame's accumulator,
-      // making organisms appear as scattered individual segments.
-      if (engine.accumulator >= SIM_DT) {
-        const seg = engine.world.segments;
-        const snapCount = engine.world.segmentCount;
-        seg.renderPrevX.set(seg.x.subarray(0, snapCount));
-        seg.renderPrevY.set(seg.y.subarray(0, snapCount));
+      // Double-buffer render interpolation (Opt 5):
+      // Flip the render buffer flag before the tick batch (O(1) — no copy).
+      // After all ticks complete, copy the final positions into renderX/Y[current].
+      // The renderer lerps renderX[1-current] (last frame) → renderX[current] (this frame).
+      const willTick = engine.accumulator >= SIM_DT;
+      if (willTick) {
+        engine.world.renderBufCurrent ^= 1;
       }
 
       let ticksThisFrame = 0;
@@ -133,6 +130,16 @@ export function createSimulationEngine(
         ticksThisFrame++;
         // Stop if we've exhausted the per-frame budget.
         if (performance.now() - budgetStart >= TICK_BUDGET_MS) break;
+      }
+
+      // After all ticks: snapshot final positions into the current render buffer.
+      // The renderer lerps renderX[1-current] (last frame's snapshot) → renderX[current].
+      if (ticksThisFrame > 0) {
+        const seg = engine.world.segments;
+        const snapCount = engine.world.segmentCount;
+        const cur = engine.world.renderBufCurrent;
+        seg.renderX[cur].set(seg.x.subarray(0, snapCount));
+        seg.renderY[cur].set(seg.y.subarray(0, snapCount));
       }
 
       // If the engine couldn't keep up (budget cap fired with debt remaining),

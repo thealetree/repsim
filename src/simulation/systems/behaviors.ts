@@ -82,6 +82,11 @@ export const foodSpatialHash = createSpatialHash();
 // Shared across behaviors, constraints, and virus systems.
 export const _orgDepthLayer = new Map<number, number>();
 
+// Module-level cache for per-organism metabolism multipliers.
+// Computed once per tick at the start of runBehaviors when temperature sources exist,
+// then read by runPhotosynthesis and runRootDrain without re-calling computeMetabolismMultiplier.
+const _metabolismMultCache = new Map<number, number>();
+
 /** Rebuild the shared depth layer map from alive organisms. Call once per tick. */
 export function computeDepthLayers(world: World): void {
   _orgDepthLayer.clear();
@@ -105,11 +110,29 @@ const _timedToRemove: number[] = [];
  * - Yellow velocity impulses get integrated by verlet
  * - Death removals happen before constraint iteration
  */
+/** Pre-compute per-organism metabolism multipliers when temperature sources exist.
+ *  Called once per tick in runBehaviors; results read by runPhotosynthesis and runRootDrain. */
+function precomputeMetabolismMults(world: World): void {
+  _metabolismMultCache.clear();
+  if (world.temperatureSources.length === 0) return;
+  const seg = world.segments;
+  for (const org of world.organisms.values()) {
+    if (!org.alive) continue;
+    const rootIdx = org.firstSegment;
+    _metabolismMultCache.set(org.id, computeMetabolismMultiplier(
+      seg.x[rootIdx], seg.y[rootIdx], world.temperatureSources,
+    ));
+  }
+}
+
 export function runBehaviors(world: World, config: SimConfig): void {
   // Reset kill tracking — only kills from THIS tick's runRedAttack trigger energy transfer
   for (const org of world.organisms.values()) {
     org.killedByOrgId = -1;
   }
+
+  // Pre-compute per-organism metabolism multipliers once (avoids 2× calls per org per tick)
+  precomputeMetabolismMults(world);
 
   // Compute depth layers once for all systems this tick
   computeDepthLayers(world);
@@ -118,7 +141,7 @@ export function runBehaviors(world: World, config: SimConfig): void {
   runPhotosynthesis(world, config);
   runRootDrain(world);
   runReplenishment(world);
-  runReproduction(world, config);  // Reproduce after metabolism, before combat
+  runReproduction(world, config, attackSpatialHash);  // Reproduce after metabolism, before combat
   runYellowMovement(world, config);
   runRedAttack(world, config);
   runScavenging(world, config);     // Segments eat food particles (white orgs: any seg)
@@ -172,40 +195,34 @@ function runPhotosynthesis(world: World, config: SimConfig): void {
   for (const org of world.organisms.values()) {
     if (!org.alive) continue;
 
-    // Temperature affects metabolism speed at root position
-    let metabolismMult = 1.0;
-    if (hasTempSources) {
-      const rootIdx = org.firstSegment;
-      metabolismMult = computeMetabolismMultiplier(
-        seg.x[rootIdx], seg.y[rootIdx], world.temperatureSources,
-      );
-    }
+    // Temperature affects metabolism speed — read from pre-computed cache (set at start of tick)
+    const metabolismMult = hasTempSources
+      ? (_metabolismMultCache.get(org.id) ?? 1.0)
+      : 1.0;
 
     if (hasLights) {
-      // LIGHT-BASED: each green segment feeds proportional to received light.
+      // LIGHT-BASED: compute light ONCE per organism at root position (Opt 3).
+      // Organisms are small relative to light-source radii, so root approximation is accurate.
       // Dark mode: light sources = light → higher light = more photosynthesis.
       // Light mode: light sources = shadow zones → higher light field = LESS photosynthesis.
       //   In light mode, ambient light is full (1.0) and shadow sources subtract from it.
+      const rootIdx = org.firstSegment;
+      let orgLight = computeLight(
+        seg.x[rootIdx], seg.y[rootIdx], world.lightSources, world.tankCells, dayNightMult,
+      );
+      if (world.isLightTheme) {
+        orgLight = Math.max(0, 1 - orgLight);
+      }
+      orgLight = Math.max(AMBIENT_LIGHT_FLOOR, Math.min(1, orgLight));
+
       let totalLightFeed = 0;
       for (let i = 0; i < org.segmentCount; i++) {
         const idx = org.firstSegment + i;
         if (!seg.alive[idx] || seg.color[idx] !== SegmentColor.Green) continue;
         if (isColorCorrupted(world, idx)) continue; // Virus suppresses photosynthesis
 
-        let light = computeLight(
-          seg.x[idx], seg.y[idx], world.lightSources, world.tankCells, dayNightMult,
-        );
-
-        if (world.isLightTheme) {
-          // Light mode: invert — ambient is 1.0, shadow sources reduce it
-          light = Math.max(0, 1 - light);
-        }
-
-        // Ambient floor: greens in total darkness still earn 15% of normal
-        light = Math.max(AMBIENT_LIGHT_FLOOR, light);
-
         const lengthMult = org.genome[i]?.length || 1;
-        totalLightFeed += Math.min(1, light) * lengthMult;
+        totalLightFeed += orgLight * lengthMult;
       }
 
       // Infection penalty: infected organisms photosynthesize at 50% efficiency
@@ -252,19 +269,15 @@ function runPhotosynthesis(world: World, config: SimConfig): void {
 function runRootDrain(world: World): void {
   if (world.tick % ROOT_DRAIN_INTERVAL_TICKS !== 0) return;
 
-  const seg = world.segments;
   const hasTempSources = world.temperatureSources.length > 0;
 
   for (const org of world.organisms.values()) {
     if (!org.alive) continue;
 
-    let metabolismMult = 1.0;
-    if (hasTempSources) {
-      const rootIdx = org.firstSegment;
-      metabolismMult = computeMetabolismMultiplier(
-        seg.x[rootIdx], seg.y[rootIdx], world.temperatureSources,
-      );
-    }
+    // Read pre-computed metabolism multiplier from cache (computed at start of tick)
+    const metabolismMult = hasTempSources
+      ? (_metabolismMultCache.get(org.id) ?? 1.0)
+      : 1.0;
 
     // Asymmetric temperature: drain feels only 70% of the metabolism effect while
     // photosynthesis feels 100%. Hot zones favor producers (bigger photo boost than
@@ -422,7 +435,6 @@ function runYellowMovement(world: World, config: SimConfig): void {
  */
 function runRedAttack(world: World, config: SimConfig): void {
   const seg = world.segments;
-  const count = world.segmentCount;
   // Depth layers already computed at start of runBehaviors via computeDepthLayers()
 
   // Precompute enabled target color bitmask from config.redTargets
@@ -447,14 +459,9 @@ function runRedAttack(world: World, config: SimConfig): void {
     }
   }
 
-  // Build spatial hash of all alive segments (for proximity queries)
-  clearSpatialHash(attackSpatialHash);
-  for (let i = 0; i < count; i++) {
-    if (seg.alive[i]) {
-      insertIntoSpatialHash(attackSpatialHash, i, seg.x[i], seg.y[i]);
-    }
-  }
-
+  // Use the spatial hash built by the previous tick's resolveCollisions (constraints.ts).
+  // Positions are one tick stale (pre-verlet of this tick), but error < SEGMENT_RADIUS.
+  // On tick 0 the hash is empty — attacks simply find no targets, which is fine.
   const aBuf = attackSpatialHash.queryBuf;
 
   // Check each red segment for nearby enemies

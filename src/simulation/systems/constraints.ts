@@ -43,15 +43,16 @@ import {
   PARALLAX_BOUNDARY_MARGIN,
 } from '../../constants';
 import {
-  createSpatialHash,
   clearSpatialHash,
   insertIntoSpatialHash,
   querySpatialHash,
 } from '../spatial-hash';
 import { computeDamping, computeCurrentForce } from '../environment';
-import { _orgDepthLayer } from './behaviors';
-
-const spatialHash = createSpatialHash();
+import { _orgDepthLayer, attackSpatialHash } from './behaviors';
+// attackSpatialHash is built by runRedAttack (in behaviors) each tick.
+// resolveCollisions reuses it instead of maintaining a separate hash, saving one full build per tick.
+// Positions may be one tick stale relative to post-verlet positions, but the error (~1 verlet step)
+// is well within SEGMENT_RADIUS and produces no visible artifacts.
 
 
 
@@ -351,19 +352,21 @@ export function resolveCollisions(world: World): void {
   const minDistSq = minDist * minDist;
   // Depth layers already computed at start of runBehaviors via computeDepthLayers()
 
-  clearSpatialHash(spatialHash);
+  // Rebuild the shared attackSpatialHash with current (post-verlet) segment positions.
+  // behaviors.ts reads this hash on the NEXT tick for red-attack proximity checks.
+  clearSpatialHash(attackSpatialHash);
   for (let i = 0; i < count; i++) {
     if (seg.alive[i]) {
-      insertIntoSpatialHash(spatialHash, i, seg.x[i], seg.y[i]);
+      insertIntoSpatialHash(attackSpatialHash, i, seg.x[i], seg.y[i]);
     }
   }
 
-  const qBuf = spatialHash.queryBuf;
+  const qBuf = attackSpatialHash.queryBuf;
 
   for (let i = 0; i < count; i++) {
     if (!seg.alive[i]) continue;
 
-    const nearbyLen = querySpatialHash(spatialHash, seg.x[i], seg.y[i]);
+    const nearbyLen = querySpatialHash(attackSpatialHash, seg.x[i], seg.y[i]);
 
     for (let n = 0; n < nearbyLen; n++) {
       const j = qBuf[n];
