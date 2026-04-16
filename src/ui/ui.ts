@@ -771,7 +771,7 @@ function buildTopBar(): HTMLElement {
         <span class="stat-item">Deaths<span class="stat-value" id="stat-deaths">0</span></span>
         <span class="stat-item" id="stat-time-wrap">&#9201;<span class="stat-value" id="stat-time">0:00</span></span>
       </div>
-      <button class="ui-btn-icon" id="repsim-copy-stats" title="Copy stats to clipboard" style="font-size:13px;padding:3px 5px">&#128203;</button>
+      <button class="ui-btn-icon" id="repsim-copy-stats" title="Copy stats to clipboard" style="font-size:13px;padding:3px 5px;display:none">&#128203;</button>
       <div class="top-divider"></div>
       <div id="repsim-tool-icons">
         <button class="tool-icon active" data-tool="0" title="Select">
@@ -869,7 +869,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.10.2</div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.10.3</div>
   `;
 
   // Virus section
