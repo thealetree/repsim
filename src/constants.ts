@@ -28,7 +28,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   purpleCost: 1000,       // Sexual repro cost per parent — total 2000 vs scaled asexual (was 2500)
   baseViscosity: 0.5,      // Default maps to VERLET_DAMPING (0.98)
   foodDecaySeconds: 120,   // Food particle lifespan in seconds (slider range 30-300)
-  redTargets: [true, true, true, true, true, true], // All 6 colors targetable by default
+  redTargets: [true, false, false, false, false, false], // Green only — red is a herbivore by default
 };
 
 
