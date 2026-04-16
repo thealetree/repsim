@@ -21,7 +21,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   virusVirulence: 0.5,   // Base virulence multiplier
   virusTransmission: 0.5, // Base transmission multiplier
   virusImmunityTime: 50,  // Seconds to develop immunity
-  greenFeed: 100,         // HP per photosynthesis tick — balanced against root drain of 70
+  greenFeed: 180,         // HP per photosynthesis tick — balanced against root drain of 70
   blueHP: 600,            // Extra HP per blue segment length unit (was 1000 — too dominant)
   yellowFreq: 1.25,       // Seconds between movement — not too twitchy, not too sluggish
   redDamage: 400,         // Damage per attack — kills a normal segment in ~2.5 hits
@@ -59,9 +59,9 @@ export function getRootDrain(segCount: number): number {
   return 30 + 8 * segCount;  // f(5)=70, f(2)=46, f(10)=110, f(15)=150
 }
 export function getReproCost(segCount: number): number {
-  return 1200 + 50 * segCount;  // f(5)=1450, f(2)=1300, f(10)=1700, f(15)=1950 — nearly flat
-  // Previously 1000+400n (f(15)=7000) which double-penalized large organisms:
-  // metabolic drain already scales with size, so steep repro cost was redundant.
+  return 1000 + 200 * segCount;  // f(5)=2000, f(2)=1400, f(10)=3000, f(15)=4000 — meaningful size scaling
+  // Previously 1200+50n (nearly flat), which made large organisms reproduce too cheaply
+  // relative to their energy gain. New formula scales repro cost with size.
 }
 export function getReproThreshold(segCount: number): number {
   return Math.floor(getMaxReserve(segCount) * 0.92);  // 92% of max — proportional for all sizes
@@ -178,7 +178,7 @@ export const GREEN_FEED_INTERVAL_TICKS = 20;    // 1.0s — photosynthesis cycle
 // Each yellow segment fires on its organism's movement timer.
 
 export const YELLOW_THRUST_STRENGTH = 2.5;      // Verlet velocity impulse per yellow segment
-export const YELLOW_MOVEMENT_COST = 30;           // HP cost per yellow segment per thrust (~25-30% of one green segment's photosynthesis output — meaningful mobility tradeoff)
+export const YELLOW_MOVEMENT_COST = 12;           // HP cost per yellow segment per thrust (~6-7% of one green segment's photosynthesis output — movement is cheap, lets mobile strategies thrive)
 export const YELLOW_DEPTH_IMPULSE = 0.03;        // Depth change per yellow from Y-component of thrust
 
 // ─── Red Attack Constants ───────────────────────────────────
@@ -188,15 +188,15 @@ export const YELLOW_DEPTH_IMPULSE = 0.03;        // Depth change per yellow from
 
 export const RED_ATTACK_RANGE = SEGMENT_RADIUS * 4;       // Proximity for attack (was *3=24, now *4=32)
 export const RED_ATTACK_COOLDOWN_TICKS = 12;               // 0.6s between attacks per organism (was 15)
-export const RED_ATTACK_HP_GAIN_FRACTION = 1.0;            // Attacker gains 1x damage as HP — energy-neutral per hit; real predation reward comes from kill bonus + reserve transfer
-export const RED_KILL_BONUS = 300;                          // Bonus HP for finishing a segment kill
+export const RED_ATTACK_HP_GAIN_FRACTION = 0.2;            // Attacker gains 0.2x damage as HP — predation is costly; reward comes primarily from kill bonus + reserve transfer
+export const RED_KILL_BONUS = 50;                           // Bonus HP for finishing a segment kill
 
 // ── Organism Kill Reward ──
 // When red attack kills an organism, the attacker absorbs stored energy.
 // Creates a real food chain: hunting well-fed prey is highly rewarding.
-export const ORGANISM_KILL_ENERGY_FRACTION = 0.5;           // Killer absorbs 50% of victim's rootHealthReserve
+export const ORGANISM_KILL_ENERGY_FRACTION = 0.15;          // Killer absorbs 15% of victim's rootHealthReserve
 export const ORGANISM_KILL_FOOD_REDUCTION = 0.5;            // Food drops halved when killed by predator
-export const ORGANISM_KILL_MIN_ENERGY = 500;                // Floor on kill reward
+export const ORGANISM_KILL_MIN_ENERGY = 100;                // Floor on kill reward
 
 
 // ─── Physics Constants ───────────────────────────────────────
