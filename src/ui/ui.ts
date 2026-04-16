@@ -447,6 +447,7 @@ function injectStyles(): void {
       display: flex;
       gap: 3px;
       flex-wrap: wrap;
+      align-items: center;
     }
     .red-target-btn {
       width: 18px;
@@ -900,8 +901,11 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
     const colorHex = hexToCSS(SEGMENT_RENDER_COLORS[c]);
     const mutedHex = muteColor(colorHex);
     const on = engine.config.redTargets[c] !== false;
+    const size = on ? '18px' : '14.4px';
+    const border = on ? `1.5px solid ${colorHex}` : 'none';
+    const bg = (on ? colorHex : mutedHex) + '55';
     redTargetsHTML += `<button class="red-target-btn${on ? ' active' : ''}" data-color="${c}" title="${redTargetColorLabels[c]}"
-      style="background:${on ? colorHex + '55' : mutedHex + '55'};border:1.5px solid ${on ? colorHex : mutedHex};opacity:1"></button>`;
+      style="background:${bg};border:${border};width:${size};height:${size};opacity:1"></button>`;
   }
   redTargetsHTML += `</div></div>`;
   slidersContent += redTargetsHTML;
@@ -1437,9 +1441,12 @@ export function createUI(
           }
         }
       });
-      // Reset red targets to all-enabled
-      engine.config.redTargets = [true, true, true, true, true, true];
-      redTargetBtns.forEach((btn) => updateRedTargetBtn(btn, true));
+      // Reset red targets to defaults (green only — red is a herbivore by default)
+      engine.config.redTargets = [...DEFAULT_CONFIG.redTargets];
+      redTargetBtns.forEach((btn) => {
+        const c = Number(btn.dataset.color);
+        updateRedTargetBtn(btn, engine.config.redTargets[c]);
+      });
     });
   }
 
@@ -1452,7 +1459,9 @@ export function createUI(
     const colorHex = redTargetColorHexes[c];
     const mutedHex = muteColor(colorHex);
     btn.style.background = (on ? colorHex : mutedHex) + '55';
-    btn.style.border = `1.5px solid ${on ? colorHex : mutedHex}`;
+    btn.style.border = on ? `1.5px solid ${colorHex}` : 'none';
+    btn.style.width = on ? '18px' : '14.4px';
+    btn.style.height = on ? '18px' : '14.4px';
     btn.style.opacity = '1';
     btn.classList.toggle('active', on);
   }
