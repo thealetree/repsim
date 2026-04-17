@@ -15,9 +15,10 @@
 import type { SimulationEngine } from '../simulation/engine';
 import type { Renderer } from '../rendering/renderer';
 import type { EventBus } from '../events';
-import type { TankPayload, SimConfig } from '../types';
+import type { TankPayload, SimConfig, SegmentColor } from '../types';
 import { flushWithoutReseed, applyTankPayload } from './save-share';
 import { seedPopulation } from '../simulation/world';
+import { createStrain, infectOrganism } from '../simulation/virus';
 import { TANK_GRID_SPACING, CAMERA_MIN_ZOOM, CAMERA_MAX_ZOOM } from '../constants';
 
 
@@ -38,6 +39,13 @@ interface ScenarioDef {
   lights?: Array<{ id: number; x: number; y: number; radius: number; intensity: number }>;
   temps?: Array<{ id: number; x: number; y: number; radius: number; intensity: number }>;
   config: Partial<SimConfig>;
+  /** Optional: seed a virus strain at scenario start and infect one random organism. */
+  seedVirus?: {
+    colorAffinity: SegmentColor;
+    spread: number;      // 0-1 contagion rate
+    damageRate: number;  // 0-1 HP drain per tick
+    lethality: number;   // 0-1 probability an infection rolls lethal
+  };
   watchFor: WatchItem[];
   questions: string[];
 }
@@ -102,6 +110,9 @@ export const SCENARIOS: ScenarioDef[] = [
       redDamage: 500,
       foodDecaySeconds: 200,
       virusEnabled: false,
+      // Pinned explicitly so the scenario's teaching holds even if defaults drift:
+      // red targets only green, so the dark room is a scavenger (white) niche.
+      redTargets: [true, false, false, false, false, false],
     },
     watchFor: [
       { time: '~2 min', text: 'Color distribution charts start diverging. Select organisms in each room to compare their genomes.' },
@@ -145,6 +156,9 @@ export const SCENARIOS: ScenarioDef[] = [
       foodDecaySeconds: 60,
       yellowFreq: 1.0,
       virusEnabled: false,
+      // Pure predator-prey: red attacks only green. Blue/yellow/etc evolve as
+      // defensive traits without being direct targets themselves.
+      redTargets: [true, false, false, false, false, false],
     },
     watchFor: [
       { time: 'First 5 min', text: 'Watch for population oscillations in the charts. Red booms tend to follow green booms by 30–60 seconds.' },
@@ -179,6 +193,7 @@ export const SCENARIOS: ScenarioDef[] = [
       greenFeed: 240,
       foodDecaySeconds: 120,
       virusEnabled: false,
+      redTargets: [true, false, false, false, false, false],
     },
     watchFor: [
       { time: 'Phase 1 (~5 min at 8x)', text: 'Note the color distribution — this is what natural selection favors in a uniform environment. Remember which color dominates.' },
@@ -193,6 +208,71 @@ export const SCENARIOS: ScenarioDef[] = [
       'If you were a conservation biologist trying to save a species that went through a bottleneck, why would you care about the genetic diversity of those few survivors?',
       'In Phase 1 with 800 organisms, if a harmful mutation appeared in one organism, what typically happens? In Phase 2 with only 10, what\'s different?',
       'Cheetahs can accept skin grafts from unrelated individuals without immune rejection. Using what you observed in Phase 2, explain how that uniformity could arise.',
+    ],
+  },
+
+  // ── Scenario 4: The Plague ────────────────────────────────
+  // Tank layout: dense central hub (169 cells) + four isolated refugium pods
+  // (36 cells each, 144 total) connected to the hub by narrow 2-wide corridors
+  // (6 cells each, 24 total). Total ~337 cells. The corridors act as imperfect
+  // quarantine barriers — viruses can spread through them but slowly, letting
+  // refugia serve as natural reservoirs of uninfected hosts and accumulated
+  // immunity. A virus is seeded in one random organism at start.
+  {
+    id: 'the-plague',
+    title: 'The Plague',
+    subtitle: 'Why parasites evolve alongside their hosts',
+    preamble: [
+      'Viruses face a cruel trade-off. A virus that kills its host too quickly has no time to spread — it burns out in one generation. A virus that\'s too mild barely reproduces. Natural selection on the virus itself pushes it toward an intermediate virulence: infectious enough to spread, gentle enough to keep hosts alive long enough to contact others.',
+      'Meanwhile, the hosts are evolving too. Survivors of an infection gain lifetime immunity to that strain\'s lineage. Blue segments accelerate the immune response. Over generations, the host population grows collectively more resistant — herd immunity — even as the virus mutates to escape familiar defenses. Neither side ever wins.',
+      'This tank is a dense central chamber ringed by four small refugium pods, connected only by narrow corridors. A virus will be seeded in one random organism at start. Watch what happens: the outbreak in the hub, whether the virus crosses into the pods, how the strain\'s spread / damage / lethality shift as it mutates, and whether the population reaches an equilibrium — or collapses.',
+    ],
+    tankCells: [
+      ...rectCells(-6, 6, -6, 6),        // Central hub: 13×13 = 169 cells
+      ...rectCells(-2, 3, -15, -10),     // North refugium: 6×6 = 36 cells
+      ...rectCells(-2, 3, 10, 15),       // South refugium: 6×6 = 36 cells
+      ...rectCells(10, 15, -2, 3),       // East refugium: 6×6 = 36 cells
+      ...rectCells(-15, -10, -2, 3),     // West refugium: 6×6 = 36 cells
+      ...rectCells(0, 1, -9, -7),        // North corridor: 2×3 = 6 cells
+      ...rectCells(0, 1, 7, 9),          // South corridor: 2×3 = 6 cells
+      ...rectCells(7, 9, 0, 1),          // East corridor: 3×2 = 6 cells
+      ...rectCells(-9, -7, 0, 1),        // West corridor: 3×2 = 6 cells
+    ],
+    // No lights — relying on ambient greenFeed so every region can sustain a
+    // small population, including the isolated refugia. A single point light
+    // would leave the corners dark.
+    config: {
+      repCount: 160,
+      repLimit: 350,
+      asexMutationRate: 2,
+      greenFeed: 210,
+      redDamage: 400,              // Default — predation isn't the story here
+      foodDecaySeconds: 120,
+      virusEnabled: true,
+      virusSpread: 1.2,
+      virusDamage: 0.9,
+      virusLethality: 0.7,
+      virusImmunityTime: 35,       // Faster than default 50 so herd immunity emerges inside a viewing window
+      redTargets: [true, false, false, false, false, false],
+    },
+    seedVirus: {
+      colorAffinity: 0 as SegmentColor,  // Green — the most common color, maximum contact surface
+      spread: 0.6,
+      damageRate: 0.6,
+      lethality: 0.7,
+    },
+    watchFor: [
+      { time: '~1 min', text: 'Initial outbreak in the hub. Watch the Infected stat climb and the Deaths counter follow.' },
+      { time: '~3–5 min', text: 'Refugium pods may still be clean — the narrow corridors slow transmission. Check if the virus eventually crosses.' },
+      { time: '~5–10 min', text: 'Strain evolution: open an infected organism\'s panel to see its strain. Strains that kill too fast burn out; strains with balanced damage and lethality persist.' },
+      { time: '~10+ min', text: 'Herd immunity: the Infected count plateaus even as the virus keeps circulating. The population has collectively learned to live with the disease.' },
+    ],
+    questions: [
+      'Why doesn\'t the virus simply evolve to be maximally lethal? What would happen to a strain that killed every host within one contact?',
+      'The refugium pods are connected to the hub by narrow 2-cell corridors. What role do those corridors play in the dynamics? What if they were wider? What if they didn\'t exist at all?',
+      'Set the Lethality slider to 0 (no infection is ever fatal) and restart. Does the virus still matter? What still affects organism fitness?',
+      'Real-world analog: isolated island populations are often devastated by diseases that mainland populations have already adapted to. How does that relate to what you\'re seeing in the pods when an infected organism finally makes it through?',
+      'Blue segments speed up immunity recovery. Over 10–15 minutes, do you see the population drift toward more blue segments on the Colors chart (try Genotype view)? What pressure would drive that?',
     ],
   },
 ];
@@ -315,6 +395,24 @@ export function createScenarioSystem(
 
     // Seed fresh population with the new config
     seedPopulation(engine.world, engine.config);
+
+    // Seed an initial virus strain if the scenario calls for one. The strain
+    // values bypass the spontaneous-generation range so the scenario designer
+    // can target a specific spot in (spread, damage, lethality) space.
+    if (def.seedVirus && engine.config.virusEnabled) {
+      const { colorAffinity, spread, damageRate, lethality } = def.seedVirus;
+      const strainIdx = createStrain(
+        engine.world.virusStrains,
+        colorAffinity, spread, damageRate, lethality, [], -1,
+      );
+      if (strainIdx >= 0) {
+        const alive = [...engine.world.organisms.values()].filter(o => o.alive);
+        if (alive.length > 0) {
+          const victim = alive[Math.floor(Math.random() * alive.length)];
+          infectOrganism(engine.world, engine.config, victim.id, strainIdx, engine.world.tick, false);
+        }
+      }
+    }
 
     // Reset selection state
     renderer.selectedOrganismId = null;
