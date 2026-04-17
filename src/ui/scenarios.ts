@@ -328,6 +328,18 @@ export function createScenarioSystem(
   let popupEl: HTMLElement | null = null;
   let badgeEl: HTMLElement | null = null;
 
+  // Clear scenario state on any simulation reset (New Tank / Flush / save-load).
+  // loadScenario itself also emits sim:reset, then immediately re-sets activeIdx
+  // and re-shows the badge — see the Start button handler below.
+  events.on('sim:reset', () => {
+    activeIdx = -1;
+    if (badgeEl) {
+      badgeEl.style.display = 'none';
+      const tabBtn = document.querySelector('.tab-btn[data-tab="scenarios"]') as HTMLElement | null;
+      if (tabBtn) delete tabBtn.dataset.scenarioActive;
+    }
+  });
+
   // ── Fit Tank to View ──
   function fitTankToView(def: ScenarioDef): void {
     if (!def.tankCells.length) {
@@ -493,10 +505,12 @@ export function createScenarioSystem(
     // Wire close button
     el.querySelector('.scenario-popup-close')!.addEventListener('click', closePopup);
 
-    // Wire start button
+    // Wire start button. Note: loadScenario emits `sim:reset` which clears
+    // activeIdx via the listener below, so we set activeIdx AFTER loadScenario
+    // to ensure the badge's click-to-reopen handler finds the right scenario.
     el.querySelector('.scenario-start-btn')!.addEventListener('click', () => {
-      activeIdx = idx;
       loadScenario(def);
+      activeIdx = idx;
       showBadge(idx);
       closePopup();
       // Close mobile half-sheet if open

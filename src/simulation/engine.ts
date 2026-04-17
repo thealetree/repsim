@@ -178,6 +178,13 @@ export function createSimulationEngine(
 
     /** Reset the entire simulation from scratch */
     reset(): void {
+      // Reset config back to defaults in place — otherwise scenario overrides
+      // (e.g. virusEnabled=true from The Plague) bleed into the new tank even
+      // though the UI appears to show a fresh state. Mutate in place so UI
+      // bindings that hold a reference to engine.config stay wired up.
+      Object.assign(engine.config, DEFAULT_CONFIG);
+      engine.config.redTargets = [...DEFAULT_CONFIG.redTargets];
+
       const newWorld = createWorld(engine.config);
       seedPopulation(newWorld, engine.config);
       engine.world = newWorld;
