@@ -557,6 +557,7 @@ export function spawnOrganismFromGenome(
     hasRed,
     immuneTo: new Set(),
     virusInfectionCount: 0,
+    infectionLethal: false,
     parentId,
     nextMoveTick: world.tick + randomInt(1, yellowIntervalTicks), // Stagger initial movement
     lastAttackTick: 0,

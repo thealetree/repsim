@@ -56,8 +56,9 @@ const TOOLTIP_TEXTS: Record<string, string> = {
 
   // Virus controls
   'virus-enabled': 'Enable the evolved parasite system — viruses emerge and evolve',
-  'virus-virulence': 'How aggressively viruses drain host energy',
-  'virus-transmission': 'How easily viruses spread between organisms on contact',
+  'virus-spread': 'How easily viruses jump between organisms on contact',
+  'virus-damage': 'How much HP a virus drains from its host per tick',
+  'virus-lethality': 'Chance any given infection is fatal. Non-fatal infections weaken hosts but don\'t kill them — immunity can still finish the fight.',
   'virus-immunity': 'How long before an organism develops immunity to a strain',
   'virus-release': 'Manually introduce a new random virus strain into the population',
 

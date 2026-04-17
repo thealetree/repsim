@@ -1,18 +1,22 @@
 /**
  * virus.ts — Evolved Parasite System
  *
- * Viruses are small evolving genomes (color affinity + virulence + transmission)
- * that infect whole organisms. They emerge from contaminated food (dense
- * food clusters spontaneously become viral), spread on ANY segment-to-segment
- * contact between organisms, and mutate each time they spread.
+ * Viruses are small evolving genomes: color affinity + three independent numeric
+ * knobs (spread / damageRate / lethality) + 1-2 effects. They emerge from
+ * contaminated food (dense food clusters spontaneously become viral), spread
+ * on ANY segment-to-segment contact between organisms, and mutate each time
+ * they spread.
  *
  * Infection is organism-wide: all segments get tagged with the strain.
  * Effects only impact segments matching the strain's color affinity.
  * Visually, all segments of an infected org turn a dark version of the target color.
  *
+ * Lethality model: at infection seed, a single roll decides whether this
+ * specific infection is lethal. Lethal infections drain HP to 0 (death).
+ * Non-lethal infections drain down to NONLETHAL_FLOOR × maxReserve and stop,
+ * so the host is weakened but survives until immunity kicks in.
+ *
  * Effects (1-2 per strain, rolled at creation):
- * - Swelling: color-matching segments grow 1.3x (renderer handles visual)
- * - EnergyDrain: siphons HP (only from color-matching segments)
  * - JointWeakness: color-matching segments wobble ±20% (constraints handle physics)
  * - ColorCorruption: behavior suppression on color-matching segments
  * - ReproductionHijack: black segments produce viral blooms (reproduction handles)
@@ -24,7 +28,7 @@
  */
 
 import type { World, SimConfig, ViralStrain, VirusStrainPool, Organism } from '../types';
-import { SegmentColor, VirusEffect, SEGMENT_COLOR_COUNT, effectsToMask } from '../types';
+import { SegmentColor, VirusEffect, VIRUS_EFFECT_VALUES, SEGMENT_COLOR_COUNT, effectsToMask } from '../types';
 import {
   VIRUS_MAX_STRAINS,
   VIRUS_FOOD_DENSITY_THRESHOLD,
@@ -35,12 +39,15 @@ import {
   VIRUS_EFFECT_INTERVAL,
   VIRUS_MUTATION_DRIFT,
   VIRUS_COLOR_MUTATION_CHANCE,
-  VIRUS_ENERGY_DRAIN_RATE,
+  VIRUS_DAMAGE_BASE,
+  NONLETHAL_FLOOR,
   VIRUS_BLUE_ADJACENCY_SPEEDUP,
-  VIRUS_INITIAL_VIRULENCE_MIN,
-  VIRUS_INITIAL_VIRULENCE_MAX,
-  VIRUS_INITIAL_TRANSMISSION_MIN,
-  VIRUS_INITIAL_TRANSMISSION_MAX,
+  VIRUS_INITIAL_DAMAGE_MIN,
+  VIRUS_INITIAL_DAMAGE_MAX,
+  VIRUS_INITIAL_SPREAD_MIN,
+  VIRUS_INITIAL_SPREAD_MAX,
+  VIRUS_INITIAL_LETHALITY_MIN,
+  VIRUS_INITIAL_LETHALITY_MAX,
   VIRUS_SPREAD_RANGE,
   FOOD_MAX_PARTICLES,
   SIM_TICKS_PER_SECOND,
@@ -60,8 +67,9 @@ export function createVirusStrainPool(): VirusStrainPool {
     strains.push({
       id: 0,
       colorAffinity: 0 as SegmentColor,
-      virulence: 0,
-      transmissionRate: 0,
+      spread: 0,
+      damageRate: 0,
+      lethality: 0,
       effects: [],
       effectsMask: 0,
       parentStrainId: -1,
@@ -79,8 +87,9 @@ export function createVirusStrainPool(): VirusStrainPool {
 export function createStrain(
   pool: VirusStrainPool,
   colorAffinity: SegmentColor,
-  virulence: number,
-  transmissionRate: number,
+  spread: number,
+  damageRate: number,
+  lethality: number,
   effects: VirusEffect[],
   parentStrainId: number,
 ): number {
@@ -90,8 +99,9 @@ export function createStrain(
   const strain = pool.strains[idx];
   strain.id = pool.nextStrainId++;
   strain.colorAffinity = colorAffinity;
-  strain.virulence = virulence;
-  strain.transmissionRate = transmissionRate;
+  strain.spread = spread;
+  strain.damageRate = damageRate;
+  strain.lethality = lethality;
   strain.effects = effects;
   strain.effectsMask = effectsToMask(effects);
   strain.parentStrainId = parentStrainId;
@@ -112,10 +122,10 @@ function releaseStrain(pool: VirusStrainPool, poolIndex: number): void {
 
 // ─── Strain Creation ───────────────────────────────────────
 
-/** Roll 1-2 random virus effects. */
+/** Roll 1-2 random virus effects from the three available (JointWeakness/ColorCorruption/ReproductionHijack). */
 function rollEffects(): VirusEffect[] {
   const count = Math.random() < 0.5 ? 1 : 2;
-  const available = [0, 1, 2, 3, 4] as VirusEffect[];
+  const available = [...VIRUS_EFFECT_VALUES];
 
   // Shuffle and pick
   for (let i = available.length - 1; i > 0; i--) {
@@ -130,26 +140,24 @@ function rollEffects(): VirusEffect[] {
 /** Create a spontaneous strain (from viral food). Optionally specify the color affinity. */
 export function createSpontaneousStrain(
   pool: VirusStrainPool,
-  config: SimConfig,
+  _config: SimConfig,
   fixedColor: number = -1,
 ): number {
   const colorAffinity = fixedColor >= 0
     ? fixedColor as SegmentColor
     : Math.floor(Math.random() * SEGMENT_COLOR_COUNT) as SegmentColor;
 
-  const virulence = VIRUS_INITIAL_VIRULENCE_MIN
-    + Math.random() * (VIRUS_INITIAL_VIRULENCE_MAX - VIRUS_INITIAL_VIRULENCE_MIN);
-  const transmission = VIRUS_INITIAL_TRANSMISSION_MIN
-    + Math.random() * (VIRUS_INITIAL_TRANSMISSION_MAX - VIRUS_INITIAL_TRANSMISSION_MIN);
+  // Strain-intrinsic rolls — global config multipliers are applied at use-sites
+  // (spread roll in runVirusSpread, damage in applyVirusEffects, lethality in
+  // infectOrganism) so the strain's own genome stays comparable as sliders change.
+  const spread = VIRUS_INITIAL_SPREAD_MIN
+    + Math.random() * (VIRUS_INITIAL_SPREAD_MAX - VIRUS_INITIAL_SPREAD_MIN);
+  const damageRate = VIRUS_INITIAL_DAMAGE_MIN
+    + Math.random() * (VIRUS_INITIAL_DAMAGE_MAX - VIRUS_INITIAL_DAMAGE_MIN);
+  const lethality = VIRUS_INITIAL_LETHALITY_MIN
+    + Math.random() * (VIRUS_INITIAL_LETHALITY_MAX - VIRUS_INITIAL_LETHALITY_MIN);
 
-  return createStrain(
-    pool,
-    colorAffinity,
-    virulence * config.virusVirulence,
-    transmission * config.virusTransmission,
-    rollEffects(),
-    -1,
-  );
+  return createStrain(pool, colorAffinity, spread, damageRate, lethality, rollEffects(), -1);
 }
 
 
@@ -172,20 +180,22 @@ export function mutateStrain(
   // Roll whether color affinity mutates (the significant mutation)
   const colorMutated = Math.random() < VIRUS_COLOR_MUTATION_CHANCE;
 
+  const drift = () => (Math.random() * 2 - 1) * VIRUS_MUTATION_DRIFT;
+  const clamp01 = (v: number) => Math.max(0.01, Math.min(1, v));
+
   if (!colorMutated) {
-    // Minor drift only — apply in-place to parent strain and reuse it
-    parent.virulence += (Math.random() * 2 - 1) * VIRUS_MUTATION_DRIFT;
-    parent.virulence = Math.max(0.01, Math.min(1, parent.virulence));
-    parent.transmissionRate += (Math.random() * 2 - 1) * VIRUS_MUTATION_DRIFT;
-    parent.transmissionRate = Math.max(0.01, Math.min(1, parent.transmissionRate));
+    // Minor drift only — apply in-place to parent strain and reuse it.
+    // All three numeric fields drift per spread.
+    parent.spread = clamp01(parent.spread + drift());
+    parent.damageRate = clamp01(parent.damageRate + drift());
+    parent.lethality = clamp01(parent.lethality + drift());
     return parentPoolIndex; // Reuse parent strain
   }
 
   // Significant mutation: new color affinity → create a new child strain
-  let virulence = parent.virulence + (Math.random() * 2 - 1) * VIRUS_MUTATION_DRIFT;
-  let transmission = parent.transmissionRate + (Math.random() * 2 - 1) * VIRUS_MUTATION_DRIFT;
-  virulence = Math.max(0.01, Math.min(1, virulence));
-  transmission = Math.max(0.01, Math.min(1, transmission));
+  const spread = clamp01(parent.spread + drift());
+  const damageRate = clamp01(parent.damageRate + drift());
+  const lethality = clamp01(parent.lethality + drift());
 
   let colorAffinity = Math.floor(Math.random() * SEGMENT_COLOR_COUNT) as SegmentColor;
   // Ensure it actually changed
@@ -196,8 +206,9 @@ export function mutateStrain(
   return createStrain(
     pool,
     colorAffinity,
-    virulence,
-    transmission,
+    spread,
+    damageRate,
+    lethality,
     [...parent.effects], // Inherit effects (don't re-roll)
     parent.id,
   );
@@ -246,6 +257,7 @@ function isImmuneToStrain(org: Organism, strain: ViralStrain, pool: VirusStrainP
  */
 export function infectOrganism(
   world: World,
+  config: SimConfig,
   orgOrSegIdx: number,
   strainPoolIndex: number,
   tick: number,
@@ -270,6 +282,11 @@ export function infectOrganism(
   if (org.virusInfectionCount > 0) return false; // Already infected
   if (isImmuneToStrain(org, strain, pool)) return false;
 
+  // Roll lethality once per infection. Lethal rolls let the damage drain HP
+  // to 0 (death); non-lethal rolls clamp HP at NONLETHAL_FLOOR × maxReserve
+  // so the host is weakened but survives until immunity fires.
+  org.infectionLethal = Math.random() < strain.lethality * config.virusLethality;
+
   // Infect ALL segments
   const storeVal = strainPoolIndex + 1; // +1 so 0 = uninfected
   let infected = 0;
@@ -290,11 +307,12 @@ export function infectOrganism(
 /** Legacy wrapper — redirects to infectOrganism for backward compat. */
 export function infectSegment(
   world: World,
+  config: SimConfig,
   segGlobalIdx: number,
   strainPoolIndex: number,
   tick: number,
 ): boolean {
-  return infectOrganism(world, segGlobalIdx, strainPoolIndex, tick, true);
+  return infectOrganism(world, config, segGlobalIdx, strainPoolIndex, tick, true);
 }
 
 
@@ -321,6 +339,7 @@ export function clearOrganismInfection(world: World, org: Organism): void {
   }
 
   org.virusInfectionCount = 0;
+  org.infectionLethal = false;
 }
 
 /** Legacy wrapper — clears the whole organism that owns this segment. */
@@ -459,13 +478,13 @@ function runVirusSpread(
       const dy = seg.y[j] - seg.y[idx];
       if (dx * dx + dy * dy > rangeSq) continue;
 
-      // Roll transmission
-      if (Math.random() > strain.transmissionRate * config.virusTransmission) continue;
+      // Roll spread (contagion gate — decoupled from damage + lethality)
+      if (Math.random() > strain.spread * config.virusSpread) continue;
 
       // Mutate and infect the entire target organism
       const childStrainIdx = mutateStrain(pool, strainPoolIdx - 1, config);
       if (childStrainIdx !== -1) {
-        if (infectOrganism(world, targetOrgId, childStrainIdx, world.tick, false)) {
+        if (infectOrganism(world, config, targetOrgId, childStrainIdx, world.tick, false)) {
           infectedThisTick.add(targetOrgId);
         }
       }
@@ -497,16 +516,19 @@ function applyVirusEffects(world: World, config: SimConfig): void {
     }
     if (!strain?.alive) continue;
 
-    // ALL viruses drain energy based on virulence. At max virulence this is fatal.
-    // Drain scales with organism size so larger organisms aren't more resistant.
-    const drainPerTick = VIRUS_ENERGY_DRAIN_RATE
-      * strain.virulence * config.virusVirulence
-      * (1 + org.segmentCount * 0.2); // Larger organisms drain faster
-    org.rootHealthReserve -= drainPerTick;
+    // Drain HP based on damageRate × global slider. Scales with organism size
+    // so bigger hosts (which have bigger reserves) aren't effectively resistant.
+    const drain = VIRUS_DAMAGE_BASE
+      * strain.damageRate * config.virusDamage
+      * (1 + org.segmentCount * 0.2);
+    org.rootHealthReserve -= drain;
 
-    // EnergyDrain effect: bonus drain on top of base virulence drain
-    if ((strain.effectsMask & (1 << VirusEffect.EnergyDrain)) !== 0) {
-      org.rootHealthReserve -= drainPerTick * 0.5; // +50% bonus drain
+    // Lethality gate: non-lethal infections clamp HP at a survival floor so
+    // the host is weakened but doesn't die from the virus itself. Lethal
+    // infections drain unchecked.
+    if (!org.infectionLethal) {
+      const floor = org.rootHealthReserveMax * NONLETHAL_FLOOR;
+      if (org.rootHealthReserve < floor) org.rootHealthReserve = floor;
     }
   }
 }

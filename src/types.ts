@@ -36,27 +36,35 @@ export const SEGMENT_COLOR_COUNT = 6;
 
 // ─── Virus Effects ──────────────────────────────────────────
 // Each virus strain rolls 1-2 of these effects when created.
+// Enum values stay as the existing IDs (2/3/4) so any in-flight strain
+// bitmasks remain valid across the rename — Swelling (0) and EnergyDrain (1)
+// were dropped in the redesign (Swelling had no gameplay impact; EnergyDrain
+// was redundant with the primary damage formula).
 
 export const VirusEffect = {
-  Swelling: 0,           // 1.3x segment scale — bigger collision profile
-  EnergyDrain: 1,        // Siphon HP from rootHealthReserve
   JointWeakness: 2,      // Rest lengths wobble ±20% — organism becomes shaky
   ColorCorruption: 3,    // Probabilistic behavior suppression (green stops photo, etc.)
   ReproductionHijack: 4, // Black segments sometimes produce viral blooms instead of children
 } as const;
 export type VirusEffect = typeof VirusEffect[keyof typeof VirusEffect];
-export const VIRUS_EFFECT_COUNT = 5;
+export const VIRUS_EFFECT_COUNT = 3;
+export const VIRUS_EFFECT_VALUES: VirusEffect[] = [
+  VirusEffect.JointWeakness,
+  VirusEffect.ColorCorruption,
+  VirusEffect.ReproductionHijack,
+];
 
 
 // ─── Viral Strain ───────────────────────────────────────────
-// A virus strain is a small evolving genome — color affinity, virulence,
-// transmission rate, and 1-2 effects. Strains mutate on spread.
+// A strain is a small evolving genome: color affinity + three numeric knobs
+// (spread, damage rate, lethality) + 1-2 effects. Strains mutate on spread.
 
 export interface ViralStrain {
   id: number;                    // Monotonic ID (never reused)
   colorAffinity: SegmentColor;   // Which segment color this strain infects
-  virulence: number;             // 0-1, how aggressively it drains HP
-  transmissionRate: number;      // 0-1, chance to spread on collision
+  spread: number;                // 0-1, chance to jump on segment collision
+  damageRate: number;            // 0-1, HP drained per effect tick when infected
+  lethality: number;             // 0-1, probability any new infection is fatal
   effects: VirusEffect[];        // 1-2 effects rolled at strain creation
   effectsMask: number;           // Bitmask of effects (1 << effect) for O(1) hot-path checks
   parentStrainId: number;        // -1 for spontaneous origin
@@ -249,6 +257,12 @@ export interface Organism {
   // Count of currently infected segments (quick aggregate for UI/logic)
   virusInfectionCount: number;
 
+  // True if the current infection rolled lethal at seed time. Lethal infections
+  // drain HP all the way to 0; non-lethal ones clamp above NONLETHAL_FLOOR so
+  // the host is weakened but survives until immunity fires. Set when the first
+  // segment gets infected; cleared when the infection is fully resolved.
+  infectionLethal: boolean;
+
   // ID of parent organism (-1 if originally spawned)
   parentId: number;
 
@@ -383,8 +397,9 @@ export interface SimConfig {
   sexMutationRate: number;   // % chance per gene of mutation in sexual reproduction
   sexGeneComboRate: number;  // % chance of picking recessive parent's gene
   virusEnabled: boolean;     // Is the virus system active?
-  virusVirulence: number;    // Base virulence multiplier (0-1 slider)
-  virusTransmission: number; // Base transmission multiplier (0-1 slider)
+  virusSpread: number;       // Global spread multiplier (slider)
+  virusDamage: number;       // Global damage-rate multiplier (slider)
+  virusLethality: number;    // Global lethality multiplier (slider) — scales chance any infection is fatal
   virusImmunityTime: number; // Seconds for immunity to develop (slider)
   greenFeed: number;         // HP gained per green photosynthesis cycle
   blueHP: number;            // Extra HP capacity for blue segments

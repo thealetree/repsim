@@ -604,7 +604,7 @@ function runScavenging(world: World, config: SimConfig): void {
         if (wasViral && config.virusEnabled) {
           const strainIdx = createSpontaneousStrain(world.virusStrains, config, viralColor);
           if (strainIdx >= 0) {
-            infectSegment(world, idx, strainIdx, world.tick);
+            infectSegment(world, config, idx, strainIdx, world.tick);
           }
         }
 

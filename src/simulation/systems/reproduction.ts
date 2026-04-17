@@ -212,7 +212,7 @@ function reproduceAsexually(world: World, parent: Organism, config: SimConfig): 
 
     // Virus: vertical transmission + immunity inheritance
     if (config.virusEnabled) {
-      transmitVirusVertically(world, parent, child);
+      transmitVirusVertically(world, config, parent, child);
       inheritImmunity(parent, child, VIRUS_IMMUNITY_INHERITANCE_CHANCE);
     }
 
@@ -310,7 +310,7 @@ function reproduceSexually(
     // Virus: vertical transmission from dominant parent + immunity from both
     // Sexual offspring inherit immunity at higher rate (75% vs 50% asexual)
     if (config.virusEnabled) {
-      transmitVirusVertically(world, dominant, child);
+      transmitVirusVertically(world, config, dominant, child);
       inheritImmunity(dominant, child, SEXUAL_IMMUNITY_INHERIT_RATE);
       inheritImmunity(recessive, child, SEXUAL_IMMUNITY_INHERIT_RATE);
     }
@@ -620,7 +620,7 @@ function removeRandomSegment(genome: Genome): Genome {
  * Infection is organism-wide, so we pass the parent's strain to the whole child.
  * VIRUS_VERTICAL_TRANSMISSION_CHANCE (15%) chance per strain.
  */
-function transmitVirusVertically(world: World, parent: Organism, child: Organism): void {
+function transmitVirusVertically(world: World, config: SimConfig, parent: Organism, child: Organism): void {
   if (parent.virusInfectionCount === 0) return;
 
   const seg = world.segments;
@@ -641,8 +641,8 @@ function transmitVirusVertically(world: World, parent: Organism, child: Organism
   const strain = world.virusStrains.strains[strainIdx];
   if (!strain?.alive) return;
 
-  // Infect the entire child organism
-  infectOrganism(world, child.id, strainIdx, world.tick, false);
+  // Infect the entire child organism (rolls fresh lethality)
+  infectOrganism(world, config, child.id, strainIdx, world.tick, false);
 }
 
 /**
@@ -717,7 +717,7 @@ function tryViralBloom(
     bloom.timedDeathAt = world.tick + VIRUS_BLOOM_LIFESPAN_TICKS;
 
     // Pre-infect the entire bloom with the hijacking strain
-    infectOrganism(world, bloom.id, hijackStrainIdx, world.tick, false);
+    infectOrganism(world, config, bloom.id, hijackStrainIdx, world.tick, false);
 
     // Initialize all bloom segments to parent's depth
     for (let s = 0; s < bloom.segmentCount; s++) {

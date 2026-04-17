@@ -60,7 +60,6 @@ import {
   FOOD_PARTICLE_RADIUS,
   FOOD_RENDER_COLOR,
   FOOD_DECAY_TICKS,
-  VIRUS_SWELLING_FACTOR,
   VIRUS_DARK_RENDER_COLORS,
   PARALLAX_STRENGTH,
   PARALLAX_MAX_OFFSET,
@@ -70,7 +69,6 @@ import {
   CURRENT_COLOR,
   CAMERA_DEFAULT_ZOOM,
 } from '../constants';
-import { VirusEffect } from '../types';
 import { computeLight, getDayNightMultiplier } from '../simulation/environment';
 import { setupTouchInput } from '../ui/touch';
 
@@ -1007,13 +1005,11 @@ export async function createRenderer(width: number, height: number): Promise<Ren
 
           // Virus: infected organisms → ALL segments use dark texture of strain's target color
           let isInfected = false;
-          let virusStrain: { colorAffinity: number; effects: number[]; effectsMask: number; alive: boolean } | null = null;
           if (seg.virusStrainId[idx] > 0) {
             const si = seg.virusStrainId[idx] - 1;
             const s = world.virusStrains.strains[si];
             if (s?.alive) {
               isInfected = true;
-              virusStrain = s;
               // Use dark texture keyed to the strain's color affinity (not the segment's own color)
               sprite.texture = infectionTextures[s.colorAffinity] ?? infectionTextures[0];
             } else {
@@ -1041,14 +1037,7 @@ export async function createRenderer(width: number, height: number): Promise<Ren
           const birthScale = effects.getBirthScale(org.id, now);
           const lengthMult = org.genome[i]?.length || 1;
           const widthMult = 1 + (lengthMult - 1) * 0.35; // Long segments are slightly wider for branch overlap
-          let uniformScale = depthScale * rootBonus * birthScale;
-
-          // Virus: Swelling only on segments matching strain's color affinity
-          if (isInfected && virusStrain
-            && colorKey === virusStrain.colorAffinity
-            && (virusStrain.effectsMask & (1 << VirusEffect.Swelling)) !== 0) {
-            uniformScale *= VIRUS_SWELLING_FACTOR;
-          }
+          const uniformScale = depthScale * rootBonus * birthScale;
 
           sprite.scale.set(uniformScale * lengthMult, uniformScale * widthMult);
 

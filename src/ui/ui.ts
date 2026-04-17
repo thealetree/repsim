@@ -934,7 +934,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.11.5</div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.11.6</div>
   `;
 
   // Virus section
@@ -948,17 +948,24 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
       </label>
     </div>
     <div class="slider-row">
-      <span class="slider-label">Virulence</span>
+      <span class="slider-label">Spread Rate</span>
       <span class="slider-cap">\u2212</span>
-      <input type="range" class="virus-slider" data-vkey="virusVirulence"
-        min="0" max="1" step="0.05" value="${engine.config.virusVirulence}">
+      <input type="range" class="virus-slider" data-vkey="virusSpread"
+        min="0" max="2" step="0.05" value="${engine.config.virusSpread}">
       <span class="slider-cap">+</span>
     </div>
     <div class="slider-row">
-      <span class="slider-label">Transmit</span>
+      <span class="slider-label">Damage Rate</span>
       <span class="slider-cap">\u2212</span>
-      <input type="range" class="virus-slider" data-vkey="virusTransmission"
-        min="0" max="1" step="0.05" value="${engine.config.virusTransmission}">
+      <input type="range" class="virus-slider" data-vkey="virusDamage"
+        min="0" max="2" step="0.05" value="${engine.config.virusDamage}">
+      <span class="slider-cap">+</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Lethality</span>
+      <span class="slider-cap">\u2212</span>
+      <input type="range" class="virus-slider" data-vkey="virusLethality"
+        min="0" max="2" step="0.05" value="${engine.config.virusLethality}">
       <span class="slider-cap">+</span>
     </div>
     <div class="slider-row">
@@ -1055,7 +1062,7 @@ function renderOrganismInfo(org: Organism | undefined): string {
     <div class="org-bar-label">Genome</div>
     ${dots}
     <div class="org-detail">Depth ${org.depth.toFixed(2)} &middot; ${org.hasBlack ? 'Sexual' : 'Asexual'}${org.hasWhite ? ' &middot; Scavenger' : ''}</div>
-    ${org.virusInfectionCount > 0 ? `<div class="org-detail" style="color:#88dd66;font-weight:600">INFECTED (${org.virusInfectionCount} seg${org.virusInfectionCount > 1 ? 's' : ''})</div>` : ''}
+    ${org.virusInfectionCount > 0 ? `<div class="org-detail" style="color:${org.infectionLethal ? '#ff6060' : '#ffaa44'};font-weight:600">${org.infectionLethal ? 'LETHAL INFECTION' : 'WEAKENING INFECTION'} (${org.virusInfectionCount} seg${org.virusInfectionCount > 1 ? 's' : ''})</div>` : ''}
     ${org.immuneTo.size > 0 ? `<div class="org-detail" style="color:var(--ui-accent)">Immune to ${org.immuneTo.size} strain${org.immuneTo.size > 1 ? 's' : ''}</div>` : ''}
   `;
 }
@@ -1546,7 +1553,7 @@ export function createUI(
     const orgs = [...world.organisms.values()].filter(o => o.alive && o.virusInfectionCount === 0);
     if (orgs.length === 0) return;
     const org = orgs[Math.floor(Math.random() * orgs.length)];
-    infectSegment(world, org.firstSegment, strainIdx, world.tick);
+    infectSegment(world, engine.config, org.firstSegment, strainIdx, world.tick);
   });
 
   // Update virus stats periodically
@@ -1740,8 +1747,9 @@ export function createUI(
       if (virusToggle) tooltips.attach(virusToggle as HTMLElement, 'virus-enabled');
       virusSection.querySelectorAll('.slider-row').forEach((row) => {
         const label = row.querySelector('.slider-label')?.textContent?.toLowerCase();
-        if (label?.includes('virulence')) tooltips.attach(row as HTMLElement, 'virus-virulence');
-        else if (label?.includes('transmit')) tooltips.attach(row as HTMLElement, 'virus-transmission');
+        if (label?.includes('spread')) tooltips.attach(row as HTMLElement, 'virus-spread');
+        else if (label?.includes('damage')) tooltips.attach(row as HTMLElement, 'virus-damage');
+        else if (label?.includes('lethality')) tooltips.attach(row as HTMLElement, 'virus-lethality');
         else if (label?.includes('defense')) tooltips.attach(row as HTMLElement, 'virus-immunity');
       });
       const releaseBtn = virusSection.querySelector('.ui-btn');

@@ -18,8 +18,9 @@ export const DEFAULT_CONFIG: SimConfig = {
   sexMutationRate: 2,     // 2% per gene — sexual repro already mixes, so slightly higher
   sexGeneComboRate: 15,   // 15% recessive gene chance — dominant parent matters
   virusEnabled: false,    // Off by default — player can enable for extra challenge
-  virusVirulence: 0.5,   // Base virulence multiplier
-  virusTransmission: 0.5, // Base transmission multiplier
+  virusSpread: 1.0,       // Global spread multiplier (1.0 = strain's own spread value)
+  virusDamage: 1.0,       // Global damage-rate multiplier
+  virusLethality: 1.0,    // Global lethality multiplier (scales chance any infection is fatal)
   virusImmunityTime: 50,  // Seconds to develop immunity
   greenFeed: 240,         // HP per photosynthesis tick — balanced against root drain of 70
   blueHP: 600,            // Extra HP per blue segment length unit (was 1000 — too dominant)
@@ -399,9 +400,10 @@ export const FOOD_RENDER_COLOR = 0xddccaa;                  // Warm off-white vi
 
 
 // ─── Virus Constants ────────────────────────────────────────
-// Viruses are evolved parasites with their own genome (color affinity,
-// virulence, transmission rate). They emerge from contaminated food,
-// spread on collision, and create evolutionary pressure on organisms.
+// Viruses are evolved parasites with their own genome: color affinity + three
+// independent knobs — spread (contagion rate), damageRate (HP drain per tick),
+// and lethality (probability a given infection is fatal). They emerge from
+// contaminated food, spread on collision, and create evolutionary pressure.
 
 export const VIRUS_MAX_STRAINS = 64;                          // Max concurrent strains in pool
 export const VIRUS_FOOD_DENSITY_THRESHOLD = 8;                // Food particles nearby to trigger viral food
@@ -412,19 +414,20 @@ export const VIRUS_SPREAD_CHECK_INTERVAL = 5;                 // Every 0.25s (fr
 export const VIRUS_EFFECT_INTERVAL = 10;                      // Every 0.5s for effect application
 export const VIRUS_VERTICAL_TRANSMISSION_CHANCE = 0.15;       // 15% parent→offspring
 export const VIRUS_IMMUNITY_INHERITANCE_CHANCE = 0.5;          // 50% immunity passed to child
-export const VIRUS_MUTATION_DRIFT = 0.1;                      // ±drift on virulence/transmission per spread
+export const VIRUS_MUTATION_DRIFT = 0.1;                      // ±drift on spread / damageRate / lethality per spread
 export const VIRUS_COLOR_MUTATION_CHANCE = 0.1;                // 10% chance affinity changes on spread
-export const VIRUS_ENERGY_DRAIN_RATE = 400;                    // HP drained per effect tick (× virulence) — scales with org size
-export const VIRUS_SWELLING_FACTOR = 1.3;                      // Scale multiplier for swollen segments
+export const VIRUS_DAMAGE_BASE = 400;                          // HP drained per effect tick (× damageRate) — scales with org size
+export const NONLETHAL_FLOOR = 0.15;                           // Non-lethal infections clamp HP at 15% of max reserve
 export const VIRUS_JOINT_WOBBLE = 0.20;                        // ±20% rest length oscillation
-export const VIRUS_CORRUPTION_RATE = 0.02;                     // Per-tick chance of behavior skip
 export const VIRUS_BLOOM_CHANCE = 0.05;                        // Per repro, chance of viral bloom
 export const VIRUS_BLOOM_LIFESPAN_TICKS = 200;                 // 10 seconds
 export const VIRUS_BLUE_ADJACENCY_SPEEDUP = 2.0;              // Blue neighbors halve immunity time
-export const VIRUS_INITIAL_VIRULENCE_MIN = 0.2;
-export const VIRUS_INITIAL_VIRULENCE_MAX = 0.8;
-export const VIRUS_INITIAL_TRANSMISSION_MIN = 0.3;
-export const VIRUS_INITIAL_TRANSMISSION_MAX = 0.7;
+export const VIRUS_INITIAL_DAMAGE_MIN = 0.2;
+export const VIRUS_INITIAL_DAMAGE_MAX = 0.8;
+export const VIRUS_INITIAL_SPREAD_MIN = 0.3;
+export const VIRUS_INITIAL_SPREAD_MAX = 0.7;
+export const VIRUS_INITIAL_LETHALITY_MIN = 0.3;
+export const VIRUS_INITIAL_LETHALITY_MAX = 0.8;
 export const VIRUS_SPREAD_RANGE = SEGMENT_RADIUS * 5;          // Wider than attack — viruses are contagious
 export const VIRUS_FOOD_COLOR = 0x88dd66;                      // Greenish food particles
 
