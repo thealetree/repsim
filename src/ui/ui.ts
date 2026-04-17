@@ -893,9 +893,8 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
       </div>
     `;
   }
-  slidersContent += `<button class="restore-defaults-btn" id="restore-defaults">Restore Defaults</button>`;
-
-  // Red attack target toggles
+  // Red attack target toggles — rendered between sliders and Restore Defaults so
+  // the toggles group with the other config controls, not below the reset action.
   const redTargetColorLabels = ['Green', 'Blue', 'Yellow', 'Red', 'Purple', 'White'];
   let redTargetsHTML = `<div class="red-targets-row"><span class="red-targets-label">Red targets</span><div class="red-target-btns">`;
   for (let c = 0; c < 6; c++) {
@@ -910,6 +909,8 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
   }
   redTargetsHTML += `</div></div>`;
   slidersContent += redTargetsHTML;
+
+  slidersContent += `<button class="restore-defaults-btn" id="restore-defaults">Restore Defaults</button>`;
 
   // Organism info
   const orgContent = `<div id="repsim-org-info"><span class="org-placeholder">Click an organism to inspect</span></div>`;
@@ -933,7 +934,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.11.1</div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.11.2</div>
   `;
 
   // Virus section

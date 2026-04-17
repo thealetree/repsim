@@ -437,27 +437,15 @@ function runRedAttack(world: World, config: SimConfig): void {
   const seg = world.segments;
   // Depth layers already computed at start of runBehaviors via computeDepthLayers()
 
-  // Precompute enabled target color bitmask from config.redTargets
+  // Precompute enabled target color bitmask from config.redTargets.
+  // Filter is applied per-segment in the inner loop — red only damages a segment
+  // whose own color is toggled on, not any segment of an organism that happens
+  // to include an enabled color elsewhere.
   let enabledColorsMask = 0;
   for (let c = 0; c < config.redTargets.length; c++) {
     if (config.redTargets[c]) enabledColorsMask |= (1 << c);
   }
   const allTargetsEnabled = enabledColorsMask === 0b111111; // fast-path: skip filter entirely
-
-  // If not all colors enabled, build per-org color presence bitmask (orgId → colorMask).
-  // Used in inner loop to skip targets with no enabled colors — O(segments) once per tick.
-  const orgColorMap = new Map<number, number>();
-  if (!allTargetsEnabled) {
-    for (const org of world.organisms.values()) {
-      if (!org.alive) continue;
-      let mask = 0;
-      for (let i = 0; i < org.segmentCount; i++) {
-        const idx = org.firstSegment + i;
-        if (seg.alive[idx]) mask |= (1 << seg.color[idx]);
-      }
-      orgColorMap.set(org.id, mask);
-    }
-  }
 
   // Use the spatial hash built by the previous tick's resolveCollisions (constraints.ts).
   // Positions are one tick stale (pre-verlet of this tick), but error < SEGMENT_RADIUS.
@@ -493,10 +481,9 @@ function runRedAttack(world: World, config: SimConfig): void {
         // Skip self (same organism)
         if (seg.organismId[j] === org.id) continue;
 
-        // Red target filter: skip target org if it has no segments of an enabled color
+        // Red target filter: skip this segment unless its own color is enabled
         if (!allTargetsEnabled) {
-          const targetMask = orgColorMap.get(seg.organismId[j]) ?? 0;
-          if ((targetMask & enabledColorsMask) === 0) continue;
+          if (!(enabledColorsMask & (1 << seg.color[j]))) continue;
         }
 
         // Skip different depth layers
