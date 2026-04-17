@@ -21,8 +21,19 @@ interface TutorialStep {
   body: string;
   /** CSS selector for the target element to highlight. null = centered on screen */
   target: string | null;
+  /** Mobile-viewport override — desktop-only targets (like the bottom panel) are
+   *  hidden under 768px, so we swap to a visible equivalent (e.g. the mobile tab). */
+  targetMobile?: string | null;
   /** Preferred card position relative to target */
   position: 'below' | 'above' | 'right' | 'left' | 'center';
+  positionMobile?: 'below' | 'above' | 'right' | 'left' | 'center';
+  /** Optional hook run when the step is shown — e.g. expand a panel so it's visible. */
+  onEnter?: () => void;
+  onEnterMobile?: () => void;
+}
+
+function isMobileViewport(): boolean {
+  return window.innerWidth < 768;
 }
 
 const STEPS: TutorialStep[] = [
@@ -111,10 +122,56 @@ const STEPS: TutorialStep[] = [
     position: 'below',
   },
   {
+    title: 'Tank Settings',
+    body: 'The bottom panel holds environment controls \u2014 ambient Light, Viscosity, Food Decay, and a Day/Night cycle. When a light, temperature, or current source is selected, its radius and intensity sliders appear here too.',
+    target: '#repsim-bottom-panel',
+    targetMobile: '.tab-btn[data-tab="environment"]',
+    position: 'above',
+    positionMobile: 'above',
+    onEnter: () => {
+      const panel = document.getElementById('repsim-bottom-panel');
+      const toggle = document.getElementById('repsim-bottom-toggle');
+      if (panel && !panel.classList.contains('expanded')) toggle?.click();
+    },
+  },
+  {
+    title: 'About Repsim & Music Controls',
+    body: 'Next to the Tank Settings tab is a second panel with a short description of Repsim, credit to creator Van Sanders, and KLADG Radio with his original music. Toggle Autoplay to have a random track start on every visit. On mobile, tap the About button at the top.',
+    target: '#repsim-about-panel',
+    targetMobile: '#repsim-about-btn',
+    position: 'above',
+    positionMobile: 'below',
+    onEnter: () => {
+      const panel = document.getElementById('repsim-about-panel');
+      const toggle = document.getElementById('repsim-about-toggle');
+      if (panel && !panel.classList.contains('expanded')) toggle?.click();
+    },
+  },
+  {
     title: 'Settings',
     body: 'Tune parameters, inspect organisms, manage viruses, and share your creations. Hover over any setting for a quick explanation.',
     target: '#repsim-right-panel',
+    targetMobile: '.tab-btn[data-tab="settings"]',
     position: 'left',
+    positionMobile: 'above',
+  },
+  {
+    title: 'Controls',
+    body: 'In the Controls section of the right panel you can toggle Tooltips (hover hints), Field Notes (ambient observations about the sim), and Tips (occasional suggestions for things to try). All three are on by default.',
+    target: '[data-section="controls"]',
+    targetMobile: '.tab-btn[data-tab="settings"]',
+    position: 'left',
+    positionMobile: 'above',
+    onEnter: () => {
+      const section = document.querySelector<HTMLElement>('[data-section="controls"]');
+      const body = section?.querySelector<HTMLElement>('.section-body');
+      const chevron = section?.querySelector<HTMLElement>('.section-chevron');
+      if (body?.classList.contains('collapsed')) {
+        body.classList.remove('collapsed');
+        chevron?.classList.remove('collapsed');
+      }
+      section?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    },
   },
   {
     title: 'Scenarios',
@@ -195,7 +252,10 @@ export function createTutorialSystem(): TutorialSystem {
   }
 
   function positionCard(cardEl: HTMLElement, step: TutorialStep): void {
-    const targetEl = step.target ? document.querySelector<HTMLElement>(step.target) : null;
+    const mobile = isMobileViewport();
+    const targetSelector = mobile && step.targetMobile !== undefined ? step.targetMobile : step.target;
+    const position = mobile && step.positionMobile ? step.positionMobile : step.position;
+    const targetEl = targetSelector ? document.querySelector<HTMLElement>(targetSelector) : null;
 
     if (targetEl) {
       // Highlight the target
@@ -215,7 +275,7 @@ export function createTutorialSystem(): TutorialSystem {
       let left = 0;
       let top = 0;
 
-      switch (step.position) {
+      switch (position) {
         case 'below':
           left = tr.left + tr.width / 2 - cr.width / 2;
           top = tr.bottom + 12;
@@ -263,6 +323,14 @@ export function createTutorialSystem(): TutorialSystem {
     }
 
     const step = STEPS[stepIdx];
+
+    // Run side-effects — e.g. expand a panel or open the mobile sheet so the
+    // target actually exists / is visible before we try to highlight it.
+    const mobile = isMobileViewport();
+    const enter = mobile && step.onEnterMobile ? step.onEnterMobile : step.onEnter;
+    if (enter) {
+      try { enter(); } catch { /* best-effort */ }
+    }
 
     if (!overlay) overlay = createOverlay();
     if (!card) card = createCard();

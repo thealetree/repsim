@@ -23,6 +23,7 @@ import { createChartSystem, injectChartStyles } from './ui/charts';
 import { parseUrlParams, injectSaveShareStyles, autoSave, autoRestore, loadOrganismFromInspector } from './ui/save-share';
 import { createTutorialSystem, createTutorialButton, autoStartTutorial, injectTutorialStyles } from './ui/tutorial';
 import { createEnvironmentPanel, injectEnvironmentPanelStyles } from './ui/environment-panel';
+import { injectAboutPanelStyles, createAboutButton, createAboutPanel } from './ui/about-panel';
 import { createScenarioSystem, injectScenarioStyles } from './ui/scenarios';
 import { createFieldNotes } from './ui/field-notes';
 import { setupMobileLayout } from './ui/mobile-layout';
@@ -97,8 +98,15 @@ async function main(): Promise<void> {
   }
 
   // ── 8b. Bottom Environment Panel ──
+  injectAboutPanelStyles();
   injectEnvironmentPanelStyles();
   createEnvironmentPanel(engine, renderer, events, tooltips);
+  createAboutPanel();
+
+  // ── 8b2. About button in top bar (opens modal on mobile, also available on desktop) ──
+  const aboutBtn = createAboutButton();
+  const topRightForAbout = document.querySelector('.top-right');
+  if (topRightForAbout) topRightForAbout.insertBefore(aboutBtn, topRightForAbout.firstChild);
 
   // ── 8c. Mobile Layout ──
   setupMobileLayout(engine, renderer, events);

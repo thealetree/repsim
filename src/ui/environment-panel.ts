@@ -49,11 +49,15 @@ export function injectEnvironmentPanelStyles(): void {
       height: 170px;
     }
 
+    /* Bottom toggles sit side-by-side at center-bottom. Tank Settings is the
+       left toggle (ends at center − 2px); About Repsim is the right toggle
+       (starts at center + 2px). Opening one closes the other — see the
+       'repsim:close-bottom-panels' custom event handlers. */
     #repsim-bottom-toggle {
       position: fixed;
       bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
+      left: calc(50% - 2px);
+      transform: translateX(-100%);
       padding: 0 14px;
       height: 22px;
       background: var(--ui-bg);
@@ -86,12 +90,13 @@ export function injectEnvironmentPanelStyles(): void {
     .bottom-panel-content {
       display: flex;
       align-items: flex-start;
-      gap: 24px;
+      flex-wrap: wrap;                /* No sideways scroll — sections wrap to new lines if needed */
+      row-gap: 10px;
+      column-gap: 24px;
       padding: 10px 16px;
-      overflow-x: auto;
-      overflow-y: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;                /* Let the panel scroll vertically if content outgrows its height */
       height: 100%;
-      white-space: nowrap;
     }
     .bottom-panel-section {
       display: inline-flex;
@@ -488,12 +493,25 @@ export function createEnvironmentPanel(
   document.body.appendChild(panel);
 
   // ── Toggle expand/collapse ──
+  // When this panel opens, it tells any sibling bottom panel (About) to close
+  // via a custom event so only one occupies the bottom real estate at a time.
   let expanded = false;
+  function applyExpanded(on: boolean): void {
+    expanded = on;
+    panel.classList.toggle('expanded', on);
+    toggle.classList.toggle('expanded', on);
+    toggle.textContent = on ? '▼ Tank Settings' : '▲ Tank Settings';
+  }
   toggle.addEventListener('click', () => {
-    expanded = !expanded;
-    panel.classList.toggle('expanded', expanded);
-    toggle.classList.toggle('expanded', expanded);
-    toggle.textContent = expanded ? '▼ Tank Settings' : '▲ Tank Settings';
+    if (!expanded) {
+      document.dispatchEvent(new CustomEvent('repsim:close-bottom-panels', { detail: { except: 'tank' } }));
+    }
+    applyExpanded(!expanded);
+  });
+  document.addEventListener('repsim:close-bottom-panels', (e) => {
+    const detail = (e as CustomEvent).detail as { except?: string } | undefined;
+    if (detail?.except === 'tank') return;
+    if (expanded) applyExpanded(false);
   });
 
   // ── Dynamically track side panel edges ──
