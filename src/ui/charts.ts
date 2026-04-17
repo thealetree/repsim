@@ -57,7 +57,8 @@ const _speciesSet = new Set<string>();
 function collectSample(engine: SimulationEngine): ChartSample {
   const world = engine.world;
   let totalSegments = 0;
-  const colorCounts = [0, 0, 0, 0, 0, 0]; // green, blue, yellow, red, black, white
+  const colorCounts = [0, 0, 0, 0, 0, 0]; // alive segments (phenotype)
+  const genomeColorCounts = [0, 0, 0, 0, 0, 0]; // genome slots across alive orgs (genotype)
   let genomeSum = 0;
   let genSum = 0;
   let maxGen = 0;
@@ -73,7 +74,7 @@ function collectSample(engine: SimulationEngine): ChartSample {
     _speciesSet.add(org.fingerprint); // Use cached fingerprint (computed at spawn)
     if (org.virusInfectionCount > 0) totalInfected++;
 
-    // Count segment colors
+    // Phenotype: count alive segments (what the dish looks like right now)
     for (let i = 0; i < org.segmentCount; i++) {
       const idx = org.firstSegment + i;
       if (world.segments.alive[idx]) {
@@ -81,6 +82,12 @@ function collectSample(engine: SimulationEngine): ChartSample {
         if (c >= 0 && c < 6) colorCounts[c]++;
         totalSegments++;
       }
+    }
+
+    // Genotype: count every gene in the genome, regardless of whether the
+    // segment is still alive. This is what evolution is actually operating on.
+    for (const gene of org.genome) {
+      if (gene.color >= 0 && gene.color < 6) genomeColorCounts[gene.color]++;
     }
   }
 
@@ -96,6 +103,7 @@ function collectSample(engine: SimulationEngine): ChartSample {
     births: world.stats.births,
     deaths: world.stats.deaths,
     colorCounts,
+    genomeColorCounts,
     avgGenomeLength: orgCount > 0 ? genomeSum / orgCount : 0,
     maxGeneration: maxGen,
     avgGeneration: orgCount > 0 ? genSum / orgCount : 0,
@@ -125,6 +133,7 @@ function drawLineChart(
   getValue: (s: ChartSample) => number,
   color: string,
   lineWidth = 1.5,
+  labelColor = color,
 ): void {
   if (data.count < 2) return;
 
@@ -158,10 +167,16 @@ function drawLineChart(
     const latest = getValue(getSample(data, data.count - 1));
     const label = Number.isInteger(latest) ? String(latest) : latest.toFixed(1);
     ctx.font = '10px Inter, system-ui, sans-serif';
-    ctx.fillStyle = color;
+    ctx.fillStyle = labelColor;
     ctx.textAlign = 'right';
     ctx.fillText(label, width - 4, 12);
   }
+}
+
+type ColorChartMode = 'phenotype' | 'genotype';
+
+function pickColorCounts(s: ChartSample, mode: ColorChartMode): number[] {
+  return mode === 'genotype' ? s.genomeColorCounts : s.colorCounts;
 }
 
 function drawStackedArea(
@@ -169,6 +184,7 @@ function drawStackedArea(
   data: ChartData,
   width: number,
   height: number,
+  mode: ColorChartMode,
 ): void {
   if (data.count < 2) return;
 
@@ -180,8 +196,9 @@ function drawStackedArea(
   let maxTotal = 0;
   for (let i = 0; i < data.count; i++) {
     const s = getSample(data, i);
+    const counts = pickColorCounts(s, mode);
     let total = 0;
-    for (let c = 0; c < 6; c++) total += s.colorCounts[c];
+    for (let c = 0; c < 6; c++) total += counts[c];
     if (total > maxTotal) maxTotal = total;
   }
   if (maxTotal === 0) maxTotal = 1;
@@ -196,8 +213,9 @@ function drawStackedArea(
     // Forward pass (top edge)
     for (let i = 0; i < data.count; i++) {
       const s = getSample(data, i);
+      const counts = pickColorCounts(s, mode);
       let cumulative = 0;
-      for (let cc = 0; cc <= c; cc++) cumulative += s.colorCounts[colorOrder[cc]];
+      for (let cc = 0; cc <= c; cc++) cumulative += counts[colorOrder[cc]];
       const x = pad + (i / (data.count - 1)) * plotW;
       const y = pad + plotH - (cumulative / maxTotal) * plotH;
       if (i === 0) ctx.moveTo(x, y);
@@ -220,8 +238,9 @@ function drawStackedArea(
     // Update prevY for next layer
     for (let i = 0; i < data.count; i++) {
       const s = getSample(data, i);
+      const counts = pickColorCounts(s, mode);
       let cumulative = 0;
-      for (let cc = 0; cc <= c; cc++) cumulative += s.colorCounts[colorOrder[cc]];
+      for (let cc = 0; cc <= c; cc++) cumulative += counts[colorOrder[cc]];
       prevY[i] = pad + plotH - (cumulative / maxTotal) * plotH;
     }
   }
@@ -317,6 +336,15 @@ export function createChartSystem(
   const birthRates: number[] = [];
   const deathRates: number[] = [];
 
+  // Colors chart mode — persisted so it survives reloads.
+  // 'phenotype' = what's alive in the dish; 'genotype' = every gene across alive organisms.
+  const COLOR_MODE_KEY = 'repsim-color-chart-mode';
+  let colorChartMode: ColorChartMode = 'phenotype';
+  try {
+    const saved = localStorage.getItem(COLOR_MODE_KEY);
+    if (saved === 'genotype' || saved === 'phenotype') colorChartMode = saved;
+  } catch { /* localStorage disabled */ }
+
   const charts: ChartDef[] = [
     {
       id: 'population',
@@ -324,14 +352,17 @@ export function createChartSystem(
       tooltipKey: 'chart-population',
       draw: (ctx, data, w, h) => {
         const accent = getComputedStyle(document.documentElement).getPropertyValue('--ui-accent').trim() || '#ffffff';
-        drawLineChart(ctx, data, w, h, s => s.population, accent);
+        // Label uses --ui-text so the count stays readable on the stat background
+        // (white in dark mode, near-black in light mode) rather than the blue accent.
+        const labelColor = getComputedStyle(document.documentElement).getPropertyValue('--ui-text').trim() || accent;
+        drawLineChart(ctx, data, w, h, s => s.population, accent, 1.5, labelColor);
       },
     },
     {
       id: 'colors',
       title: 'COLORS',
       tooltipKey: 'chart-colors',
-      draw: (ctx, data, w, h) => drawStackedArea(ctx, data, w, h),
+      draw: (ctx, data, w, h) => drawStackedArea(ctx, data, w, h, colorChartMode),
     },
     {
       id: 'birthsdeath',
@@ -481,6 +512,40 @@ export function createChartSystem(
 
     body.appendChild(canvasWrap);
 
+    // Colors chart: phenotype / genotype toggle pill below the canvas.
+    // Phenotype counts alive segments (what the dish looks like);
+    // genotype counts every gene across alive organisms (what's being selected for).
+    if (chart.id === 'colors') {
+      const pill = document.createElement('div');
+      pill.className = 'chart-mode-pill';
+      pill.innerHTML = `
+        <button data-mode="phenotype" class="${colorChartMode === 'phenotype' ? 'active' : ''}">Phenotype</button>
+        <button data-mode="genotype" class="${colorChartMode === 'genotype' ? 'active' : ''}">Genotype</button>
+      `;
+      body.appendChild(pill);
+      pill.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest('button[data-mode]') as HTMLButtonElement | null;
+        if (!btn) return;
+        const mode = btn.dataset.mode as ColorChartMode;
+        if (mode === colorChartMode) return;
+        colorChartMode = mode;
+        try { localStorage.setItem(COLOR_MODE_KEY, mode); } catch { /* noop */ }
+        pill.querySelectorAll('button').forEach(b =>
+          b.classList.toggle('active', (b as HTMLButtonElement).dataset.mode === mode)
+        );
+        // Redraw just the colors canvas
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const dpr = window.devicePixelRatio || 1;
+          const w = canvas.clientWidth;
+          const h = canvas.clientHeight;
+          ctx.clearRect(0, 0, w * dpr, h * dpr);
+          chart.draw(ctx, chartData, w, h);
+        }
+      });
+      if (tooltips) tooltips.attach(pill, 'chart-colors-mode');
+    }
+
     // Accordion toggle with persistence
     header.addEventListener('click', () => {
       const isCollapsed = body.classList.toggle('collapsed');
@@ -613,6 +678,34 @@ export function injectChartStyles(): void {
     }
     #repsim-left-panel-toggle:hover {
       color: var(--ui-text);
+    }
+
+    /* ── Colors chart mode toggle pill ── */
+    .chart-mode-pill {
+      display: inline-flex;
+      margin-top: 6px;
+      padding: 2px;
+      background: var(--ui-surface);
+      border-radius: 10px;
+      border: 1px solid var(--ui-border);
+    }
+    .chart-mode-pill button {
+      font-family: inherit;
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      padding: 2px 8px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--ui-text-muted);
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+    }
+    .chart-mode-pill button:hover { color: var(--ui-text); }
+    .chart-mode-pill button.active {
+      background: var(--ui-accent-dim);
+      color: var(--ui-accent);
     }
 
     /* ── Chart placeholder ── */

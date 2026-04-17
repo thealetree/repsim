@@ -68,6 +68,7 @@ const TOOLTIP_TEXTS: Record<string, string> = {
   // Chart panels (brief labels)
   'chart-population': 'Total living organisms over time',
   'chart-colors': 'Segment color distribution over time',
+  'chart-colors-mode': 'Phenotype = alive segments in the dish. Genotype = every gene across alive organisms (what evolution selects on).',
   'chart-birthsdeath': 'Birth and death rates over time',
   'chart-genomelength': 'Average number of segments per organism over time',
   'chart-generation': 'Average and maximum generation depth over time',

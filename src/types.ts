@@ -463,7 +463,8 @@ export interface ChartSample {
   population: number;
   births: number;              // cumulative
   deaths: number;              // cumulative
-  colorCounts: number[];       // [green, blue, yellow, red, black, white] segment totals
+  colorCounts: number[];       // [green, blue, yellow, red, black, white] ALIVE segment totals (phenotype)
+  genomeColorCounts: number[]; // [green, blue, yellow, red, black, white] GENOME totals across alive orgs (genotype)
   avgGenomeLength: number;
   maxGeneration: number;
   avgGeneration: number;
