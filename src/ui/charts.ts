@@ -162,14 +162,16 @@ function drawLineChart(
   ctx.lineWidth = lineWidth;
   ctx.stroke();
 
-  // Label: current value (top-right)
+  // Label: current value (bottom-right)
   if (data.count > 0) {
     const latest = getValue(getSample(data, data.count - 1));
     const label = Number.isInteger(latest) ? String(latest) : latest.toFixed(1);
     ctx.font = '10px Inter, system-ui, sans-serif';
     ctx.fillStyle = labelColor;
     ctx.textAlign = 'right';
-    ctx.fillText(label, width - 4, 12);
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(label, width - 4, height - 4);
+    ctx.textBaseline = 'alphabetic';
   }
 }
 
@@ -285,16 +287,18 @@ function drawDualLine(
     ctx.stroke();
   }
 
-  // Labels
+  // Labels (bottom-right, stacked A above B)
   if (data.count > 0) {
     const latest = getSample(data, data.count - 1);
     ctx.font = '10px Inter, system-ui, sans-serif';
     ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
     const aVal = getA(latest), bVal = getB(latest);
     ctx.fillStyle = colorA;
-    ctx.fillText(Number.isInteger(aVal) ? String(aVal) : aVal.toFixed(1), width - 4, 12);
+    ctx.fillText(Number.isInteger(aVal) ? String(aVal) : aVal.toFixed(1), width - 4, height - 16);
     ctx.fillStyle = colorB;
-    ctx.fillText(Number.isInteger(bVal) ? String(bVal) : bVal.toFixed(1), width - 4, 24);
+    ctx.fillText(Number.isInteger(bVal) ? String(bVal) : bVal.toFixed(1), width - 4, height - 4);
+    ctx.textBaseline = 'alphabetic';
   }
 }
 
@@ -360,7 +364,7 @@ export function createChartSystem(
     },
     {
       id: 'colors',
-      title: 'COLORS',
+      title: 'SEGMENT TYPE RATIO',
       tooltipKey: 'chart-colors',
       draw: (ctx, data, w, h) => drawStackedArea(ctx, data, w, h, colorChartMode),
     },
@@ -389,13 +393,15 @@ export function createChartSystem(
           ctx.lineWidth = 1.5;
           ctx.stroke();
         }
-        // Labels
+        // Labels (bottom-right, stacked)
         ctx.font = '10px Inter, system-ui, sans-serif';
         ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
         ctx.fillStyle = '#44cc44';
-        ctx.fillText(birthRates[n - 1].toFixed(1), w - 4, 12);
+        ctx.fillText(birthRates[n - 1].toFixed(1), w - 4, h - 16);
         ctx.fillStyle = '#ff4444';
-        ctx.fillText(deathRates[n - 1].toFixed(1), w - 4, 24);
+        ctx.fillText(deathRates[n - 1].toFixed(1), w - 4, h - 4);
+        ctx.textBaseline = 'alphabetic';
       },
     },
     {
@@ -680,9 +686,11 @@ export function injectChartStyles(): void {
       color: var(--ui-text);
     }
 
-    /* ── Colors chart mode toggle pill ── */
+    /* ── Colors chart mode toggle pill — full chart width ── */
     .chart-mode-pill {
-      display: inline-flex;
+      display: flex;
+      width: 100%;
+      box-sizing: border-box;
       margin-top: 6px;
       padding: 2px;
       background: var(--ui-surface);
@@ -690,6 +698,7 @@ export function injectChartStyles(): void {
       border: 1px solid var(--ui-border);
     }
     .chart-mode-pill button {
+      flex: 1 1 0;
       font-family: inherit;
       font-size: 9px;
       font-weight: 500;
