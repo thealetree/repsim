@@ -527,7 +527,7 @@ export function buildSaveShareSection(
   slotsLabel.textContent = 'Save Slots';
   slotsContainer.appendChild(slotsLabel);
 
-  const slotElements: { nameEl: HTMLSpanElement; saveBtn: HTMLButtonElement; loadBtn: HTMLButtonElement }[] = [];
+  const slotElements: { nameEl: HTMLSpanElement; saveBtn: HTMLButtonElement; loadBtn: HTMLButtonElement; clearBtn: HTMLButtonElement }[] = [];
 
   for (let i = 0; i < SLOT_COUNT; i++) {
     const row = document.createElement('div');
@@ -554,13 +554,20 @@ export function buildSaveShareSection(
     slotLoadBtn.disabled = true;
     slotLoadBtn.style.opacity = '0.4';
 
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'slot-clear-btn';
+    clearBtn.textContent = '\u00D7';
+    clearBtn.title = 'Clear slot';
+    clearBtn.disabled = true;
+
     row.appendChild(numEl);
     row.appendChild(nameEl);
     row.appendChild(saveBtn);
     row.appendChild(slotLoadBtn);
+    row.appendChild(clearBtn);
     slotsContainer.appendChild(row);
 
-    slotElements.push({ nameEl, saveBtn, loadBtn: slotLoadBtn });
+    slotElements.push({ nameEl, saveBtn, loadBtn: slotLoadBtn, clearBtn });
   }
 
   body.appendChild(slotsContainer);
@@ -578,6 +585,8 @@ export function buildSaveShareSection(
       el.nameEl.style.color = isEmpty ? 'var(--ui-text-muted)' : 'var(--ui-text)';
       el.loadBtn.disabled = isEmpty;
       el.loadBtn.style.opacity = isEmpty ? '0.4' : '1';
+      el.clearBtn.disabled = isEmpty;
+      el.clearBtn.style.opacity = isEmpty ? '0.25' : '1';
     }
   }
 
@@ -631,6 +640,19 @@ export function buildSaveShareSection(
       } catch {
         showToast('Failed to load save data');
       }
+    });
+  }
+
+  // Clear handlers
+  for (let i = 0; i < SLOT_COUNT; i++) {
+    slotElements[i].clearBtn.addEventListener('click', () => {
+      if (slots[i].name === null) return;
+      const clearedName = slots[i].name;
+      slots[i].name = null;
+      slots[i].data = null;
+      persistSlots(slots);
+      renderSlots();
+      showToast(`Cleared slot ${i + 1}${clearedName ? ` (${clearedName})` : ''}`);
     });
   }
 
@@ -894,7 +916,7 @@ export function buildOrganismSlots(
   label.textContent = 'Organism Slots';
   container.appendChild(label);
 
-  const slotElements: { nameEl: HTMLSpanElement; saveBtn: HTMLButtonElement; loadBtn: HTMLButtonElement }[] = [];
+  const slotElements: { nameEl: HTMLSpanElement; saveBtn: HTMLButtonElement; loadBtn: HTMLButtonElement; clearBtn: HTMLButtonElement }[] = [];
 
   for (let i = 0; i < ORG_SLOT_COUNT; i++) {
     const row = document.createElement('div');
@@ -921,13 +943,20 @@ export function buildOrganismSlots(
     slotLoadBtn.disabled = true;
     slotLoadBtn.style.opacity = '0.4';
 
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'slot-clear-btn';
+    clearBtn.textContent = '\u00D7';
+    clearBtn.title = 'Clear slot';
+    clearBtn.disabled = true;
+
     row.appendChild(numEl);
     row.appendChild(nameEl);
     row.appendChild(saveBtn);
     row.appendChild(slotLoadBtn);
+    row.appendChild(clearBtn);
     container.appendChild(row);
 
-    slotElements.push({ nameEl, saveBtn, loadBtn: slotLoadBtn });
+    slotElements.push({ nameEl, saveBtn, loadBtn: slotLoadBtn, clearBtn });
   }
 
   // Slot state management
@@ -943,6 +972,8 @@ export function buildOrganismSlots(
       el.nameEl.style.color = isEmpty ? 'var(--ui-text-muted)' : 'var(--ui-text)';
       el.loadBtn.disabled = isEmpty;
       el.loadBtn.style.opacity = isEmpty ? '0.4' : '1';
+      el.clearBtn.disabled = isEmpty;
+      el.clearBtn.style.opacity = isEmpty ? '0.25' : '1';
     }
   }
 
@@ -956,7 +987,11 @@ export function buildOrganismSlots(
 
       const payload = serializeOrganism(org.genome, org.generation, org.name);
       slots[i].data = JSON.stringify(payload);
-      slots[i].name = slots[i].name ?? org.name;
+      // Always update the slot label to the saved organism's current name —
+      // the old `?? org.name` only set it when the slot was empty, so
+      // overwriting left a stale label from a previous occupant. Users can
+      // still click-to-rename after saving if they want a custom label.
+      slots[i].name = org.name;
       persistOrgSlots(slots);
       renderSlots();
       showToast(`Saved "${org.name}" to slot ${i + 1}`);
@@ -976,6 +1011,19 @@ export function buildOrganismSlots(
       } catch {
         showToast('Failed to load organism');
       }
+    });
+  }
+
+  // Clear handlers
+  for (let i = 0; i < ORG_SLOT_COUNT; i++) {
+    slotElements[i].clearBtn.addEventListener('click', () => {
+      if (slots[i].name === null) return;
+      const clearedName = slots[i].name;
+      slots[i].name = null;
+      slots[i].data = null;
+      persistOrgSlots(slots);
+      renderSlots();
+      showToast(`Cleared slot ${i + 1}${clearedName ? ` (${clearedName})` : ''}`);
     });
   }
 
@@ -1048,6 +1096,29 @@ export function injectSaveShareStyles(): void {
     .repsim-toast.visible {
       opacity: 1;
     }
+
+    /* Slot clear button (× on right of each save slot row) */
+    .slot-clear-btn {
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      padding: 0;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1;
+      border: 1px solid transparent;
+      border-radius: 3px;
+      background: transparent;
+      color: var(--ui-text-muted);
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+    }
+    .slot-clear-btn:not(:disabled):hover {
+      background: rgba(255, 80, 80, 0.12);
+      border-color: rgba(255, 80, 80, 0.4);
+      color: #ff6060;
+    }
+    .slot-clear-btn:disabled { cursor: default; }
 
     /* ── Mobile Responsive ── */
     @media (max-width: 767px) {
