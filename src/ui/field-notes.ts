@@ -55,6 +55,7 @@ const TIPS: string[] = [
   'Tip: If a rep looks tiny, an early green segment probably got pruned. Evolution will eventually favor greens placed as leaves, not near the root.',
   'Tip: The Center Map button (bottom-right) fits the whole tank to your screen, no matter the size.',
   'Tip: Pause (Space) and click through organisms to compare genomes. The prose summary tells you what role each one fills.',
+  'Tip: These tips (and the observation stream) can be toggled off in the Controls section of the right panel. Or dismiss just this one with the × on the pill.',
 ];
 
 interface FieldNote {
