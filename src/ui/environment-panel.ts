@@ -267,6 +267,40 @@ export function injectEnvironmentPanelStyles(): void {
       background: rgba(255,60,60,0.2);
     }
 
+    /* Floating delete badge anchored near a selected env source on the canvas */
+    #repsim-source-delete-badge {
+      position: fixed;
+      z-index: 90;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,80,80,0.55);
+      background: rgba(28,14,14,0.85);
+      color: #ff8080;
+      font: 600 14px/1 var(--ui-font);
+      cursor: pointer;
+      user-select: none;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      transform: translate(-50%, -50%);
+      transition: opacity 0.12s ease, transform 0.12s ease;
+      opacity: 0.92;
+      padding: 0;
+    }
+    #repsim-source-delete-badge:hover {
+      background: rgba(60,20,20,0.95);
+      color: #ffb0b0;
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.12);
+    }
+    #repsim-source-delete-badge.visible { display: flex; }
+    @media (max-width: 767px) {
+      #repsim-source-delete-badge { width: 28px; height: 28px; font-size: 16px; }
+    }
+
     /* ── Mobile Responsive ── */
     @media (max-width: 767px) {
       #repsim-bottom-panel,
@@ -274,6 +308,109 @@ export function injectEnvironmentPanelStyles(): void {
     }
   `;
   document.head.appendChild(style);
+}
+
+
+// ─── Source deletion ─────────────────────────────────────────
+
+/**
+ * Remove the currently-selected env source (light / temp / current) and
+ * clear selection state. No-op if nothing is selected. Used by the Delete
+ * key, the bottom-panel delete button, and the floating overlay button.
+ */
+export function deleteSelectedSource(
+  renderer: Renderer,
+  world: World,
+  events: EventBus,
+): boolean {
+  const type = renderer.selectedSourceType;
+  const id = renderer.selectedSourceId;
+  if (!type || id === null) return false;
+
+  const arr = type === 'light' ? world.lightSources
+    : type === 'temperature' ? world.temperatureSources
+    : world.currentSources;
+  const idx = arr.findIndex(s => s.id === id);
+  if (idx < 0) return false;
+  arr.splice(idx, 1);
+
+  renderer.selectedSourceType = null;
+  renderer.selectedSourceId = null;
+  events.emit('source:selected', { type: null, id: null });
+  return true;
+}
+
+
+// ─── Floating source-delete badge ────────────────────────────
+
+/**
+ * Create a small floating "×" button anchored near whichever env source is
+ * currently selected. Lets the user delete a source without opening the
+ * bottom panel's Tank Settings drawer.
+ */
+function createSourceDeleteBadge(
+  engine: SimulationEngine,
+  renderer: Renderer,
+  events: EventBus,
+): void {
+  const badge = document.createElement('button');
+  badge.id = 'repsim-source-delete-badge';
+  badge.type = 'button';
+  badge.setAttribute('aria-label', 'Delete source');
+  badge.title = 'Delete source (Delete)';
+  badge.textContent = '\u00D7'; // ×
+  document.body.appendChild(badge);
+
+  badge.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    deleteSelectedSource(renderer, engine.world, events);
+  });
+  // Prevent the canvas's mousedown-drag-source logic from swallowing the click
+  badge.addEventListener('mousedown', (e) => e.stopPropagation());
+
+  const OFFSET_X = 22;
+  const OFFSET_Y = -22;
+  const EDGE_PAD = 8;
+
+  function findSelectedSource(): { x: number; y: number } | null {
+    const type = renderer.selectedSourceType;
+    const id = renderer.selectedSourceId;
+    if (!type || id === null) return null;
+    const world = engine.world;
+    const arr = type === 'light' ? world.lightSources
+      : type === 'temperature' ? world.temperatureSources
+      : world.currentSources;
+    const src = arr.find(s => s.id === id);
+    return src ? { x: src.x, y: src.y } : null;
+  }
+
+  function tick(): void {
+    const src = findSelectedSource();
+    if (!src) {
+      if (badge.classList.contains('visible')) badge.classList.remove('visible');
+      return;
+    }
+    const canvas = renderer.getCanvas();
+    const rect = canvas.getBoundingClientRect();
+    const { x: sx, y: sy } = renderer.worldToScreen(src.x, src.y);
+    const { width: cw, height: ch } = renderer.getScreenDimensions();
+    const scaleX = rect.width / cw;
+    const scaleY = rect.height / ch;
+    let px = rect.left + sx * scaleX + OFFSET_X;
+    let py = rect.top + sy * scaleY + OFFSET_Y;
+    // Clamp to viewport so the badge never disappears off-edge
+    const bw = 22, bh = 22;
+    px = Math.max(rect.left + bw / 2 + EDGE_PAD, Math.min(rect.right - bw / 2 - EDGE_PAD, px));
+    py = Math.max(rect.top + bh / 2 + EDGE_PAD, Math.min(rect.bottom - bh / 2 - EDGE_PAD, py));
+    badge.style.left = `${px}px`;
+    badge.style.top = `${py}px`;
+    if (!badge.classList.contains('visible')) badge.classList.add('visible');
+  }
+  // setInterval (vs rAF) so the badge tracks correctly even when the tab is
+  // backgrounded or the browser throttles rAF. Cost is ~4 reads + a style
+  // write per tick, which is negligible.
+  setInterval(tick, 33); // ~30fps is plenty for a floating HUD element
 }
 
 
@@ -285,6 +422,9 @@ export function createEnvironmentPanel(
   events: EventBus,
   tooltips?: TooltipSystem,
 ): void {
+  // ── Floating delete badge (inline source-delete UX, no drawer needed) ──
+  createSourceDeleteBadge(engine, renderer, events);
+
   // ── Build toggle button ──
   const toggle = document.createElement('div');
   toggle.id = 'repsim-bottom-toggle';
@@ -682,16 +822,7 @@ export function createEnvironmentPanel(
     // Delete
     const deleteBtn = document.getElementById('src-delete');
     deleteBtn?.addEventListener('click', () => {
-      const arr = type === 'light' ? world.lightSources
-        : type === 'temperature' ? world.temperatureSources
-        : world.currentSources;
-      const idx = arr.findIndex(s => s.id === id);
-      if (idx >= 0) arr.splice(idx, 1);
-
-      // Deselect
-      renderer.selectedSourceType = null;
-      renderer.selectedSourceId = null;
-      events.emit('source:selected', { type: null, id: null });
+      deleteSelectedSource(renderer, world, events);
     });
   }
 }

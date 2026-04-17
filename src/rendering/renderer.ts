@@ -110,6 +110,10 @@ export interface Renderer {
   setToolMode(mode: ToolMode): void;
   zoom(delta: number): void;
   recenterView(): void;
+  /** Current on-screen dimensions of the canvas in CSS pixels. */
+  getScreenDimensions(): { width: number; height: number };
+  /** Convert a world-space position to current on-screen (canvas-local) CSS pixels. */
+  worldToScreen(wx: number, wy: number): { x: number; y: number };
 }
 
 
@@ -681,9 +685,34 @@ export async function createRenderer(width: number, height: number): Promise<Ren
     },
 
     recenterView(): void {
-      camera.x = 0;
-      camera.y = 0;
-      camera.zoom = CAMERA_DEFAULT_ZOOM;
+      // Center on the current tank's actual bounds, not world origin — the user's
+      // tank may be drawn anywhere in grid space. Compute zoom to fit the tank
+      // with a small margin on whichever axis is tighter.
+      const bounds = currentWorld ? computeTankBounds(currentWorld) : null;
+      if (bounds) {
+        camera.x = (bounds.minX + bounds.maxX) / 2;
+        camera.y = (bounds.minY + bounds.maxY) / 2;
+        const margin = 0.92; // leave ~8% breathing room around the tank
+        const tankW = Math.max(1, bounds.maxX - bounds.minX);
+        const tankH = Math.max(1, bounds.maxY - bounds.minY);
+        const zoomFit = Math.min(screenWidth / tankW, screenHeight / tankH) * margin;
+        camera.zoom = Math.max(camera.minZoom, Math.min(camera.maxZoom, zoomFit));
+      } else {
+        camera.x = 0;
+        camera.y = 0;
+        camera.zoom = CAMERA_DEFAULT_ZOOM;
+      }
+    },
+
+    getScreenDimensions(): { width: number; height: number } {
+      return { width: screenWidth, height: screenHeight };
+    },
+
+    worldToScreen(wx: number, wy: number): { x: number; y: number } {
+      return {
+        x: (wx - camera.x) * camera.zoom + screenWidth / 2,
+        y: (wy - camera.y) * camera.zoom + screenHeight / 2,
+      };
     },
 
     render(world: World, alpha: number): void {
@@ -1450,6 +1479,32 @@ function createFoodTexture(app: Application, hexColor: number): Texture {
   g.destroy();
   return texture;
 }
+
+/**
+ * World-space bounding box of the current tank (in pixels, inclusive).
+ * Returns null if the tank has no cells. Used by recenterView to fit-to-screen.
+ */
+function computeTankBounds(world: World): { minX: number; minY: number; maxX: number; maxY: number } | null {
+  if (world.tankCells.size === 0) return null;
+  const gs = TANK_GRID_SPACING;
+  let minC = Infinity, maxC = -Infinity, minR = Infinity, maxR = -Infinity;
+  for (const key of world.tankCells) {
+    const sep = key.indexOf(',');
+    const c = Number(key.slice(0, sep));
+    const r = Number(key.slice(sep + 1));
+    if (c < minC) minC = c;
+    if (c > maxC) maxC = c;
+    if (r < minR) minR = r;
+    if (r > maxR) maxR = r;
+  }
+  return {
+    minX: minC * gs,
+    minY: minR * gs,
+    maxX: (maxC + 1) * gs,
+    maxY: (maxR + 1) * gs,
+  };
+}
+
 
 /** Create a soft radial gradient texture from Canvas2D, for environment overlays */
 function createRadialGradientTexture(

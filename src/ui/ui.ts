@@ -19,6 +19,7 @@ import {
 } from '../constants';
 import { createSpontaneousStrain, infectSegment } from '../simulation/virus';
 import { buildSaveShareSection, createShareButton, createSpawnInput, buildOrganismSlots, flushWithoutReseed, clearAutoSave, saveOrganismToInspectorSync, autoSave } from './save-share';
+import { deleteSelectedSource } from './environment-panel';
 
 // ─── Color names for display ──────────────────────────────────
 const COLOR_NAMES: Record<number, string> = {
@@ -932,7 +933,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.11.0</div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.11.1</div>
   `;
 
   // Virus section
@@ -1211,6 +1212,13 @@ export function createUI(
       if (engine.paused) engine.setPaused(false);
       engine.setSpeed(speed);
       activateSpeedButton(speed);
+    }
+
+    // Delete/Backspace: remove the selected env source (light/temp/current)
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (deleteSelectedSource(renderer, engine.world, events)) {
+        e.preventDefault();
+      }
     }
   });
 
