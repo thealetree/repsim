@@ -24,6 +24,7 @@ import { parseUrlParams, injectSaveShareStyles, autoSave, autoRestore, loadOrgan
 import { createTutorialSystem, createTutorialButton, autoStartTutorial, injectTutorialStyles } from './ui/tutorial';
 import { createEnvironmentPanel, injectEnvironmentPanelStyles } from './ui/environment-panel';
 import { createScenarioSystem, injectScenarioStyles } from './ui/scenarios';
+import { createFieldNotes } from './ui/field-notes';
 import { setupMobileLayout } from './ui/mobile-layout';
 import { DEFAULT_CONFIG, TANK_HALF_WIDTH, TANK_HALF_HEIGHT } from './constants';
 import { spawnOrganismFromGenome } from './simulation/world';
@@ -100,6 +101,9 @@ async function main(): Promise<void> {
   // ── 9a. Scenario System ──
   injectScenarioStyles();
   createScenarioSystem(engine, renderer, events);
+
+  // ── 9b. Field Notes — ambient observation stream ──
+  createFieldNotes(engine, events);
 
   // ── 9. Tutorial System ──
   injectTutorialStyles();

@@ -10,7 +10,7 @@
 import type { SimulationEngine } from '../simulation/engine';
 import type { Renderer } from '../rendering/renderer';
 import type { EventBus } from '../events';
-import type { Organism } from '../types';
+import type { Organism, World } from '../types';
 import { ToolMode } from '../types';
 import {
   SEGMENT_RENDER_COLORS,
@@ -20,6 +20,7 @@ import {
 import { createSpontaneousStrain, infectSegment } from '../simulation/virus';
 import { buildSaveShareSection, createShareButton, createSpawnInput, buildOrganismSlots, flushWithoutReseed, clearAutoSave, saveOrganismToInspectorSync, autoSave } from './save-share';
 import { deleteSelectedSource } from './environment-panel';
+import { describeOrganism } from './field-notes';
 
 // ─── Color names for display ──────────────────────────────────
 const COLOR_NAMES: Record<number, string> = {
@@ -478,6 +479,18 @@ function injectStyles(): void {
       font-size: 11px;
       color: var(--ui-text-dim);
     }
+    .org-prose {
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--ui-text);
+      margin-top: 8px;
+      padding: 8px 10px;
+      background: var(--ui-surface);
+      border-radius: 6px;
+      border: 1px solid var(--ui-border);
+      font-style: italic;
+    }
+    .org-prose:empty { display: none; }
     .org-bar {
       height: 4px;
       background: var(--ui-bar-bg);
@@ -934,7 +947,15 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v1.0.2</div>
+    <div id="repsim-field-notes-row" style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
+      <span style="font-size:11px;color:var(--ui-text-dim)">Field Notes</span>
+      <label style="position:relative;display:inline-block;width:32px;height:18px;cursor:pointer">
+        <input type="checkbox" id="repsim-field-notes-checkbox" style="opacity:0;width:0;height:0">
+        <span style="position:absolute;inset:0;background:var(--ui-slider-track);border-radius:9px;transition:background 0.2s"></span>
+        <span id="repsim-field-notes-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
+      </label>
+    </div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v1.1.0</div>
   `;
 
   // Virus section
@@ -1037,7 +1058,7 @@ function buildZoomControls(): HTMLElement {
 }
 
 // ─── Organism info renderer ──────────────────────────────────
-function renderOrganismInfo(org: Organism | undefined): string {
+function renderOrganismInfo(org: Organism | undefined, world: World): string {
   if (!org || !org.alive) {
     return '<span class="org-placeholder">Click an organism to inspect</span>';
   }
@@ -1064,6 +1085,7 @@ function renderOrganismInfo(org: Organism | undefined): string {
     <div class="org-detail">Depth ${org.depth.toFixed(2)} &middot; ${org.hasBlack ? 'Sexual' : 'Asexual'}${org.hasWhite ? ' &middot; Scavenger' : ''}</div>
     ${org.virusInfectionCount > 0 ? `<div class="org-detail" style="color:${org.infectionLethal ? '#ff6060' : '#ffaa44'};font-weight:600">${org.infectionLethal ? 'LETHAL INFECTION' : 'WEAKENING INFECTION'} (${org.virusInfectionCount} seg${org.virusInfectionCount > 1 ? 's' : ''})</div>` : ''}
     ${org.immuneTo.size > 0 ? `<div class="org-detail" style="color:var(--ui-accent)">Immune to ${org.immuneTo.size} strain${org.immuneTo.size > 1 ? 's' : ''}</div>` : ''}
+    <div class="org-prose">${describeOrganism(org, world)}</div>
   `;
 }
 
@@ -1640,7 +1662,7 @@ export function createUI(
   orgInfoEl.parentElement!.appendChild(orgSlots);
 
   function updateOrgInfo(org: Organism | undefined): void {
-    orgInfoEl.innerHTML = renderOrganismInfo(org);
+    orgInfoEl.innerHTML = renderOrganismInfo(org, engine.world);
     const alive = org?.alive ? '' : 'none';
     shareBtn.style.display = alive;
     inspectorBtn.style.display = alive;
@@ -1779,6 +1801,30 @@ export function createUI(
       });
       const tooltipRow = document.getElementById('repsim-tooltips-row');
       if (tooltipRow) tooltips.attach(tooltipRow, 'tooltips-toggle');
+    }
+
+    // Field Notes ON/OFF toggle
+    const fnCheckbox = document.getElementById('repsim-field-notes-checkbox') as HTMLInputElement | null;
+    const fnDot = document.getElementById('repsim-field-notes-dot');
+    if (fnCheckbox) {
+      const readEnabled = (): boolean => {
+        const fn = (window as unknown as Record<string, unknown>).__repsimFieldNotesEnabled;
+        return typeof fn === 'function' ? Boolean((fn as () => boolean)()) : false;
+      };
+      const syncDot = (): void => {
+        if (!fnDot) return;
+        fnDot.style.left = fnCheckbox.checked ? '16px' : '2px';
+        fnDot.style.background = fnCheckbox.checked ? 'var(--ui-accent)' : 'var(--ui-text-muted)';
+      };
+      fnCheckbox.checked = readEnabled();
+      syncDot();
+      fnCheckbox.addEventListener('change', () => {
+        const setter = (window as unknown as Record<string, unknown>).__repsimFieldNotesToggle;
+        if (typeof setter === 'function') (setter as (on: boolean) => void)(fnCheckbox.checked);
+        syncDot();
+      });
+      const fnRow = document.getElementById('repsim-field-notes-row');
+      if (fnRow) tooltips.attach(fnRow, 'field-notes-toggle');
     }
   }
 }

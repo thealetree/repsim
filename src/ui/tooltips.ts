@@ -54,6 +54,9 @@ const TOOLTIP_TEXTS: Record<string, string> = {
   'slider-sexMutationRate': 'Mutation chance per gene during sexual reproduction (%)',
   'slider-sexGeneComboRate': 'Chance of picking the recessive parent\'s gene during crossover (%)',
 
+  // Field Notes
+  'field-notes-toggle': 'Surface plain-language observations about the sim as it runs',
+
   // Virus controls
   'virus-enabled': 'Enable the evolved parasite system — viruses emerge and evolve',
   'virus-spread': 'How easily viruses jump between organisms on contact',
