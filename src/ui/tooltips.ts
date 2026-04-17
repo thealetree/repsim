@@ -56,6 +56,7 @@ const TOOLTIP_TEXTS: Record<string, string> = {
 
   // Field Notes
   'field-notes-toggle': 'Surface plain-language observations about the sim as it runs',
+  'tips-toggle': 'Occasionally surface a suggestion for something to try — features, techniques, scenario ideas',
 
   // Virus controls
   'virus-enabled': 'Enable the evolved parasite system — viruses emerge and evolve',

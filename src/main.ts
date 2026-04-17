@@ -57,6 +57,11 @@ async function main(): Promise<void> {
   injectTooltipStyles();
   const tooltips = createTooltipSystem();
 
+  // Field Notes sets up globals that the UI's toggle checkboxes read from,
+  // so initialize it BEFORE createUI. The module has no UI dependencies of
+  // its own — it creates its pill + modal imperatively.
+  createFieldNotes(engine, events);
+
   // ── 6. UI Layer ──
   createUI(engine, renderer, events, tooltips);
 
@@ -101,9 +106,6 @@ async function main(): Promise<void> {
   // ── 9a. Scenario System ──
   injectScenarioStyles();
   createScenarioSystem(engine, renderer, events);
-
-  // ── 9b. Field Notes — ambient observation stream ──
-  createFieldNotes(engine, events);
 
   // ── 9. Tutorial System ──
   injectTutorialStyles();

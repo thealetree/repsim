@@ -20,11 +20,42 @@ import type { EventBus } from '../events';
 import type { ChartSample, Organism, World } from '../types';
 
 const STORAGE_KEY = 'repsim-field-notes';
+const TIPS_STORAGE_KEY = 'repsim-tips';
 const HISTORY_MAX = 30;
-const NOTE_DISPLAY_MS = 18_000;       // How long a note lingers in the pill
-const PILL_FADE_MS = 350;              // CSS transition time
+const NOTE_DISPLAY_MS = 5_000;         // Linger long enough to read without rushing
+const PILL_FADE_IN_MS = 280;           // Quick fade-in
+const PILL_FADE_OUT_MS = 700;          // Slower, graceful dissolve
 const STATS_WINDOW_SIZE = 60;          // ~5 min of samples at 100 ticks each
 const DEFAULT_ENABLED = true;
+const DEFAULT_TIPS_ENABLED = true;
+const TIP_MIN_INTERVAL_MS = 60_000;    // First tip at least 60s after boot
+const TIP_AVG_INTERVAL_MS = 90_000;    // Typical spacing between tips (randomized)
+
+// Curated tips — suggestions the user might not have discovered yet.
+// Shown through the same pill UI as field notes, but scheduled by time
+// rather than sim events. Each tip fires at most once per session.
+const TIPS: string[] = [
+  'Tip: Hold Alt and scroll to adjust depth focus — reveals the 2.5D layering of organisms.',
+  'Tip: Shift + click-drag paints wall cells into the tank. Build your own environment.',
+  'Tip: Try setting Sun Feed to 0 with just one or two light sources. Watch organisms crowd the lit zones.',
+  'Tip: Click any rep to see its genome dots, HP, and prose summary — each dot matches a segment on its body.',
+  'Tip: Save & Share → Copy URL sends your entire tank setup to someone else. Or save it to one of four slots.',
+  'Tip: The Virus panel\'s Release Virus button seeds a single random strain. Then watch what the sliders do.',
+  'Tip: Scenarios come with curated tanks and teaching prompts. The Plague shows virus evolution; Founder\'s Luck shows genetic drift.',
+  'Tip: The Segment Type Ratio chart has Phenotype/Genotype modes. Genotype shows what\'s encoded in genes even when those segments died.',
+  'Tip: Flush reseeds the population in the same tank — useful for Phase 2 of Founder\'s Luck, or to reset dynamics without losing your setup.',
+  'Tip: Organism names are built from the DFS traversal of their genome. Same genome = same name; related lineages share prefixes.',
+  'Tip: The toolbar (top bar) switches between Select / Walls / Light / Temperature / Current. Place environment sources anywhere.',
+  'Tip: Red segments only attack green by default. Change which colors red targets in Simulation → Red Targets.',
+  'Tip: Blue segments halve the time to develop immunity to a virus strain. Matters a lot in virus-heavy runs.',
+  'Tip: Lower Mate Cost to see reproduction explode. Lower Mutate % to let structures stabilize once they\'re working.',
+  'Tip: Turn on Day / Night cycle in Tank Settings (bottom) to add rhythmic pressure — organisms have to handle periodic darkness.',
+  'Tip: Temperature sources change metabolism speed. Warm = faster everything; cold = slower, more viscous.',
+  'Tip: Currents push segments around. Whirlpools are good for mixing populations; directional currents can trap or sort them.',
+  'Tip: If a rep looks tiny, an early green segment probably got pruned. Evolution will eventually favor greens placed as leaves, not near the root.',
+  'Tip: The Center Map button (bottom-right) fits the whole tank to your screen, no matter the size.',
+  'Tip: Pause (Space) and click through organisms to compare genomes. The prose summary tells you what role each one fills.',
+];
 
 interface FieldNote {
   id: number;
@@ -98,9 +129,9 @@ const RULES: Rule[] = [
       const dom = dominantColor(ctx.latest.colorCounts);
       const pct = Math.round((ratio - 1) * 100);
       const variants = [
-        `Population boom: ${d.start} → ${d.end}${dom ? ` — ${dom.name} reps are leading the charge.` : '.'}`,
-        `+${pct}% population in minutes (${d.start} → ${d.end}). Something about this environment rewards ${dom?.name ?? 'what you\'ve got'}.`,
-        `Surge: ${d.end} alive, up from ${d.start}. ${dom ? `${capitalize(dom.name)}-dominant lineages are thriving.` : 'The tank is filling fast.'}`,
+        `Population boom: ${d.start} → ${d.end}${dom ? ` — reps carrying plenty of ${dom.name} are leading the charge.` : '.'}`,
+        `+${pct}% population in minutes (${d.start} → ${d.end}). Something about this environment rewards ${dom?.name ?? 'the current'} segments.`,
+        `Surge: ${d.end} alive, up from ${d.start}. ${dom ? `${capitalize(dom.name)}-heavy lineages are thriving.` : 'The tank is filling fast.'}`,
         `The population just jumped ${pct}%. ${dom && dom.pct > 0.5 ? `${capitalize(dom.name)} segments are paying off.` : 'A new equilibrium is forming.'}`,
       ];
       return pick(variants);
@@ -284,7 +315,7 @@ const RULES: Rule[] = [
       const variants = [
         `Stable at ~${ctx.latest.population} for several minutes. ${dom ? `${capitalize(dom.name)}-heavy body plans found an equilibrium.` : 'The ecosystem has settled.'} Try releasing a virus or shifting Sun Feed.`,
         `Flat line: population holding near ${ctx.latest.population}. Want to see it respond? Adjust a slider.`,
-        `${ctx.latest.population} alive and nothing dramatic happening. ${dom ? `${capitalize(dom.name)} reps are the steady state here.` : 'The tank is at rest.'}`,
+        `${ctx.latest.population} alive and nothing dramatic happening. ${dom ? `Reps with plenty of ${dom.name} are the steady state here.` : 'The tank is at rest.'}`,
       ];
       return pick(variants);
     },
@@ -371,11 +402,23 @@ export function createFieldNotes(engine: SimulationEngine, events: EventBus): vo
   const ruleCooldowns = new Map<string, number>(); // kind → sample-index of last fire
 
   let enabled = loadEnabled();
+  let tipsEnabled = loadTipsEnabled();
   let nextNoteId = 1;
   let sampleIdx = 0;                  // Monotonic counter
   let currentNote: FieldNote | null = null;
   let noteTimer: number | null = null;
   let historyModal: HTMLElement | null = null;
+
+  // ── Tips state ──
+  // Tips fire on a randomized timer, independent of sim events. Shuffle the
+  // tip list once so users see all 20 before any repeat in a single session.
+  const tipOrder: number[] = TIPS.map((_, i) => i);
+  for (let i = tipOrder.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [tipOrder[i], tipOrder[j]] = [tipOrder[j], tipOrder[i]];
+  }
+  let tipCursor = 0;
+  let tipTimer: number | null = null;
 
   // ── DOM ──
   injectStyles();
@@ -481,7 +524,7 @@ export function createFieldNotes(engine: SimulationEngine, events: EventBus): vo
       pill.classList.remove('visible');
       window.setTimeout(() => {
         if (currentNote?.id === note.id) pill.style.display = 'none';
-      }, PILL_FADE_MS);
+      }, PILL_FADE_OUT_MS);
     }, NOTE_DISPLAY_MS);
   }
 
@@ -535,13 +578,55 @@ export function createFieldNotes(engine: SimulationEngine, events: EventBus): vo
     window.setTimeout(() => m.remove(), 250);
   }
 
-  // ── Toggle (exposed via global function for Settings wiring) ──
+  // ── Tips scheduler ──
+  // Fires a curated tip through the same pill. Randomized interval so
+  // successive tips don't feel metronomic. Skips firing if a tip would
+  // overwrite a just-shown field note (grace period ≈ display window).
+  function fireTip(): void {
+    if (!tipsEnabled) return;
+    if (tipCursor >= tipOrder.length) {
+      // Reshuffle and start over — users who run long sessions get fresh order
+      for (let i = tipOrder.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [tipOrder[i], tipOrder[j]] = [tipOrder[j], tipOrder[i]];
+      }
+      tipCursor = 0;
+    }
+    const text = TIPS[tipOrder[tipCursor++]];
+    emitNote('tip', text);
+  }
+
+  function scheduleNextTip(): void {
+    if (tipTimer !== null) { window.clearTimeout(tipTimer); tipTimer = null; }
+    if (!tipsEnabled) return;
+    const jitter = TIP_AVG_INTERVAL_MS * (0.6 + Math.random() * 0.8); // ±40% spread
+    const delay = Math.max(TIP_MIN_INTERVAL_MS, Math.round(jitter));
+    tipTimer = window.setTimeout(() => {
+      fireTip();
+      scheduleNextTip();
+    }, delay);
+  }
+
+  if (tipsEnabled) scheduleNextTip();
+
+  // ── Toggles (exposed via global functions for Settings wiring) ──
   (window as unknown as Record<string, unknown>).__repsimFieldNotesToggle = (on: boolean) => {
     enabled = on;
     saveEnabled(on);
     if (!on) hidePill();
   };
   (window as unknown as Record<string, unknown>).__repsimFieldNotesEnabled = () => enabled;
+  (window as unknown as Record<string, unknown>).__repsimTipsToggle = (on: boolean) => {
+    tipsEnabled = on;
+    saveTipsEnabled(on);
+    if (on) {
+      scheduleNextTip();
+    } else if (tipTimer !== null) {
+      window.clearTimeout(tipTimer);
+      tipTimer = null;
+    }
+  };
+  (window as unknown as Record<string, unknown>).__repsimTipsEnabled = () => tipsEnabled;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────
@@ -604,6 +689,19 @@ function loadEnabled(): boolean {
 
 function saveEnabled(on: boolean): void {
   try { localStorage.setItem(STORAGE_KEY, on ? 'on' : 'off'); } catch { /* noop */ }
+}
+
+function loadTipsEnabled(): boolean {
+  try {
+    const v = localStorage.getItem(TIPS_STORAGE_KEY);
+    if (v === 'on') return true;
+    if (v === 'off') return false;
+  } catch { /* localStorage disabled */ }
+  return DEFAULT_TIPS_ENABLED;
+}
+
+function saveTipsEnabled(on: boolean): void {
+  try { localStorage.setItem(TIPS_STORAGE_KEY, on ? 'on' : 'off'); } catch { /* noop */ }
 }
 
 function escapeHTML(s: string): string {
@@ -670,7 +768,6 @@ function injectStyles(): void {
       position: fixed;
       top: 52px;
       left: 50%;
-      transform: translateX(-50%);
       z-index: 85;
       display: flex;
       align-items: center;
@@ -686,7 +783,11 @@ function injectStyles(): void {
       color: var(--ui-text);
       cursor: pointer;
       opacity: 0;
-      transition: opacity ${PILL_FADE_MS}ms ease, transform ${PILL_FADE_MS}ms ease;
+      /* Default (fade-out) transition — slow graceful dissolve.
+         When .visible is added, the transition overrides to a quicker fade-in. */
+      transition:
+        opacity ${PILL_FADE_OUT_MS}ms cubic-bezier(0.4, 0, 0.2, 1),
+        transform ${PILL_FADE_OUT_MS}ms cubic-bezier(0.4, 0, 0.2, 1);
       transform: translateX(-50%) translateY(-6px);
       white-space: nowrap;
       overflow: hidden;
@@ -695,6 +796,9 @@ function injectStyles(): void {
     .field-notes-pill.visible {
       opacity: 1;
       transform: translateX(-50%) translateY(0);
+      transition:
+        opacity ${PILL_FADE_IN_MS}ms cubic-bezier(0.2, 0, 0.2, 1),
+        transform ${PILL_FADE_IN_MS}ms cubic-bezier(0.2, 0, 0.2, 1);
     }
     .field-notes-pill:hover { border-color: var(--ui-accent); }
     .field-notes-dot {

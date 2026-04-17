@@ -955,7 +955,15 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-field-notes-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v1.1.1</div>
+    <div id="repsim-tips-row" style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
+      <span style="font-size:11px;color:var(--ui-text-dim)">Tips</span>
+      <label style="position:relative;display:inline-block;width:32px;height:18px;cursor:pointer">
+        <input type="checkbox" id="repsim-tips-checkbox" style="opacity:0;width:0;height:0">
+        <span style="position:absolute;inset:0;background:var(--ui-slider-track);border-radius:9px;transition:background 0.2s"></span>
+        <span id="repsim-tips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
+      </label>
+    </div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v1.1.2</div>
   `;
 
   // Virus section
@@ -1825,6 +1833,30 @@ export function createUI(
       });
       const fnRow = document.getElementById('repsim-field-notes-row');
       if (fnRow) tooltips.attach(fnRow, 'field-notes-toggle');
+    }
+
+    // Tips ON/OFF toggle — independent of Field Notes; shares the same pill UI
+    const tipsCheckbox = document.getElementById('repsim-tips-checkbox') as HTMLInputElement | null;
+    const tipsDot = document.getElementById('repsim-tips-dot');
+    if (tipsCheckbox) {
+      const readEnabled = (): boolean => {
+        const fn = (window as unknown as Record<string, unknown>).__repsimTipsEnabled;
+        return typeof fn === 'function' ? Boolean((fn as () => boolean)()) : false;
+      };
+      const syncDot = (): void => {
+        if (!tipsDot) return;
+        tipsDot.style.left = tipsCheckbox.checked ? '16px' : '2px';
+        tipsDot.style.background = tipsCheckbox.checked ? 'var(--ui-accent)' : 'var(--ui-text-muted)';
+      };
+      tipsCheckbox.checked = readEnabled();
+      syncDot();
+      tipsCheckbox.addEventListener('change', () => {
+        const setter = (window as unknown as Record<string, unknown>).__repsimTipsToggle;
+        if (typeof setter === 'function') (setter as (on: boolean) => void)(tipsCheckbox.checked);
+        syncDot();
+      });
+      const tipsRow = document.getElementById('repsim-tips-row');
+      if (tipsRow) tooltips.attach(tipsRow, 'tips-toggle');
     }
   }
 }
