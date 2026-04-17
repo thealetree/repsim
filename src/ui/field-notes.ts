@@ -252,18 +252,26 @@ const RULES: Rule[] = [
     },
   },
 
-  // First sexual reproduction — purple/black color appears in force
+  // Sexual reproduction taking hold — gated so it doesn't fire just because
+  // random seeding scattered purple segments. Needs (1) at least 5 minutes of
+  // sim time so initial noise has settled, AND (2) purple to be a real
+  // presence — ≥5% of all segments — not just scattered leftovers.
   {
     kind: 'first-sexual',
     cooldownSamples: 0,
     check: (ctx) => {
       if (ctx.firstFlags.has('first-sexual')) return null;
-      if (ctx.latest.colorCounts[4] < 3) return null;
+      if (ctx.world.tick < 6000) return null; // 5 min at 20 ticks/sec
+      const total = ctx.latest.colorCounts.reduce((a, b) => a + b, 0);
+      if (total < 100) return null;
+      const purple = ctx.latest.colorCounts[4];
+      if (purple / total < 0.05) return null;
       ctx.firstFlags.add('first-sexual');
+      const pct = Math.round((purple / total) * 100);
       return pick([
-        'Sexual reproduction is taking hold. Purple segments are expensive — the sim is rich enough to afford them.',
-        'Purple segments are here. That\'s sexual reproduction — costlier per child, but it shuffles genes.',
-        'Sex emerged. Purple is costly, so the population must be thriving to support it.',
+        `Sexual reproduction is taking hold — purple segments are now ${pct}% of the population. The sim is rich enough to afford the cost.`,
+        `Purple crossed ${pct}%. That's sexual reproduction sticking around — costlier per child, but it shuffles genes every generation.`,
+        `Sex is here to stay. Purple is expensive, so ${pct}% means the population is thriving enough to support it.`,
       ]);
     },
   },
