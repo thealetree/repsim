@@ -34,6 +34,16 @@
   </head>
   <body>
     <div id="app"></div>
+    <script>
+      // Apply saved theme before first paint to avoid a dark flash for light-mode users.
+      try {
+        if (localStorage.getItem('repsim-theme') === 'light') {
+          document.documentElement.classList.add('light-theme');
+          document.documentElement.style.background = '#f8f9fb';
+          document.body.style.background = '#f8f9fb';
+        }
+      } catch (e) { /* localStorage may be disabled */ }
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

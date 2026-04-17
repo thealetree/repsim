@@ -934,7 +934,7 @@ function buildRightPanel(engine: SimulationEngine): HTMLElement {
         <span id="repsim-tooltips-dot" style="position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--ui-text-muted);border-radius:50%;transition:all 0.2s"></span>
       </label>
     </div>
-    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.11.2</div>
+    <div style="text-align:right;margin-top:8px;font-size:9px;color:var(--ui-text-muted);letter-spacing:0.03em">v0.11.3</div>
   `;
 
   // Virus section
@@ -1261,18 +1261,32 @@ export function createUI(
   });
 
   // ── Theme toggle ──
-  let currentTheme: 'dark' | 'light' = 'dark';
+  // Persisted across reloads via localStorage — the inline script in index.html
+  // applies the class early to prevent flash; this block syncs renderer/world/icon.
+  const MOON_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M21.64 13a1 1 0 00-1.05-.14 8.05 8.05 0 01-3.37.73A8.15 8.15 0 019.08 5.49a8.59 8.59 0 01.25-2 1 1 0 00-1.28-1.18A10 10 0 1021.93 14.12a1 1 0 00-.29-1.12z"/></svg>';
+  const SUN_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><circle cx="12" cy="12" r="4"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 5.64l2.12-2.12"/></svg>';
+
+  let savedTheme: 'dark' | 'light' = 'dark';
+  try {
+    if (localStorage.getItem('repsim-theme') === 'light') savedTheme = 'light';
+  } catch { /* localStorage disabled */ }
+
+  let currentTheme: 'dark' | 'light' = savedTheme;
   const themeBtn = document.getElementById('repsim-theme-toggle')!;
+
+  // Apply saved theme to all consumers (class already on <html> if light)
+  document.documentElement.classList.toggle('light-theme', currentTheme === 'light');
+  renderer.setTheme(currentTheme);
+  engine.world.isLightTheme = currentTheme === 'light';
+  themeBtn.innerHTML = currentTheme === 'dark' ? MOON_SVG : SUN_SVG;
 
   themeBtn.addEventListener('click', () => {
     currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
     document.documentElement.classList.toggle('light-theme', currentTheme === 'light');
     renderer.setTheme(currentTheme);
     engine.world.isLightTheme = currentTheme === 'light';
-    // Swap icon: moon for dark, sun for light
-    themeBtn.innerHTML = currentTheme === 'dark'
-      ? '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M21.64 13a1 1 0 00-1.05-.14 8.05 8.05 0 01-3.37.73A8.15 8.15 0 019.08 5.49a8.59 8.59 0 01.25-2 1 1 0 00-1.28-1.18A10 10 0 1021.93 14.12a1 1 0 00-.29-1.12z"/></svg>'
-      : '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><circle cx="12" cy="12" r="4"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 5.64l2.12-2.12"/></svg>';
+    themeBtn.innerHTML = currentTheme === 'dark' ? MOON_SVG : SUN_SVG;
+    try { localStorage.setItem('repsim-theme', currentTheme); } catch { /* noop */ }
     // Inform the user that light sources invert between light and shadow in the two themes
     showThemeToast(
       currentTheme === 'light'
