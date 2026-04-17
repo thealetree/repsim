@@ -72,7 +72,10 @@ interface ObservationContext {
   latest: ChartSample;
   prev: ChartSample | null;   // Sample immediately before latest, if any
   firstFlags: Set<string>;    // Mutated by rules that want one-time fires
-  tick: number;
+  tick: number;               // Absolute world tick
+  ticksSinceReset: number;    // Ticks since last sim:reset / Flush. Time-based
+                              // gates should use THIS so they don't leak past
+                              // flushes (engine.flush keeps world.tick running).
 }
 
 type Rule = {
@@ -254,15 +257,17 @@ const RULES: Rule[] = [
   },
 
   // Sexual reproduction taking hold — gated so it doesn't fire just because
-  // random seeding scattered purple segments. Needs (1) at least 5 minutes of
-  // sim time so initial noise has settled, AND (2) purple to be a real
-  // presence — ≥5% of all segments — not just scattered leftovers.
+  // random seeding scattered purple segments. Needs (1) at least 5 minutes
+  // SINCE THE LAST RESET/FLUSH so initial noise has settled, AND (2) purple to
+  // be a real presence — ≥5% of all segments — not just scattered leftovers.
+  // Using ticksSinceReset (not absolute tick) ensures a Flush on a long-running
+  // sim re-arms the gate for the fresh population.
   {
     kind: 'first-sexual',
     cooldownSamples: 0,
     check: (ctx) => {
       if (ctx.firstFlags.has('first-sexual')) return null;
-      if (ctx.world.tick < 6000) return null; // 5 min at 20 ticks/sec
+      if (ctx.ticksSinceReset < 6000) return null; // 5 min at 20 ticks/sec
       const total = ctx.latest.colorCounts.reduce((a, b) => a + b, 0);
       if (total < 100) return null;
       const purple = ctx.latest.colorCounts[4];
@@ -414,6 +419,7 @@ export function createFieldNotes(engine: SimulationEngine, events: EventBus): vo
   let tipsEnabled = loadTipsEnabled();
   let nextNoteId = 1;
   let sampleIdx = 0;                  // Monotonic counter
+  let resetAtTick = 0;                // world.tick at the most recent sim:reset
   let currentNote: FieldNote | null = null;
   let noteTimer: number | null = null;
   let historyModal: HTMLElement | null = null;
@@ -469,6 +475,10 @@ export function createFieldNotes(engine: SimulationEngine, events: EventBus): vo
     ruleCooldowns.clear();
     history.length = 0;
     sampleIdx = 0;
+    // Flush doesn't reset world.tick, but from the user's perspective it IS a
+    // fresh start. Store the tick at reset so time-based gates can measure
+    // elapsed sim-time from this moment, not absolute world.tick.
+    resetAtTick = engine.world.tick;
     hidePill();
   });
 
@@ -492,6 +502,7 @@ export function createFieldNotes(engine: SimulationEngine, events: EventBus): vo
       prev,
       firstFlags,
       tick: engine.world.tick,
+      ticksSinceReset: engine.world.tick - resetAtTick,
     };
 
     for (const rule of RULES) {
