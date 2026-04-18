@@ -323,15 +323,15 @@ function injectMobileStyles(): void {
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--ui-text-dim);
-      padding: 2px 12px 2px;
+      padding: 6px 12px 4px;
       border-top: 1px solid var(--ui-border);
     }
     #repsim-top-dropdown-static > *:first-child { border-top: none; padding-top: 2px; }
     #repsim-top-dropdown-static .quickref-content.mobile {
-      padding: 4px 12px 0;
+      padding: 4px 12px 8px;   /* small breathing room before the separator */
     }
     #repsim-top-dropdown-static .about-mobile-inline {
-      padding: 2px 12px 4px;
+      padding: 4px 12px 4px;
       display: flex;
       flex-direction: column;
       gap: 10px;
