@@ -315,23 +315,23 @@ function injectMobileStyles(): void {
     }
 
     /* Static-content headers inside the top dropdown.
-       Border-top stays as the visual separator between sections; margin + padding
-       are tight so consecutive sections don't feel like they have dead space. */
+       Border-top IS the separator — padding above it is 0 so the sections
+       feel tightly stacked, not gappy. */
     .top-dropdown-static-header {
       font-size: 10px;
       font-weight: 600;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--ui-text-dim);
-      padding: 6px 12px 4px;
+      padding: 2px 12px 2px;
       border-top: 1px solid var(--ui-border);
     }
     #repsim-top-dropdown-static > *:first-child { border-top: none; padding-top: 2px; }
     #repsim-top-dropdown-static .quickref-content.mobile {
-      padding: 4px 12px 6px;
+      padding: 4px 12px 0;
     }
     #repsim-top-dropdown-static .about-mobile-inline {
-      padding: 4px 12px 14px;
+      padding: 2px 12px 4px;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -376,7 +376,7 @@ function injectMobileStyles(): void {
       -webkit-overflow-scrolling: touch; /* smooth iOS inertial scrolling */
       overscroll-behavior: contain;      /* scroll doesn't bubble to the canvas */
       touch-action: pan-y;               /* explicit permission for vertical drag */
-      padding: 10px 12px 20px;
+      padding: 10px 12px 6px;            /* minimal tail padding — content ends snug at the bottom */
     }
     #repsim-top-dropdown-scroll > * + * { margin-top: 10px; }
 
