@@ -314,20 +314,21 @@ function injectMobileStyles(): void {
       #repsim-mobile-more { display: flex; }
     }
 
-    /* Static-content headers inside the top dropdown */
+    /* Static-content headers inside the top dropdown.
+       Border-top stays as the visual separator between sections; margin + padding
+       are tight so consecutive sections don't feel like they have dead space. */
     .top-dropdown-static-header {
       font-size: 10px;
       font-weight: 600;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--ui-text-dim);
-      padding: 10px 12px 4px;
-      margin-top: 8px;
+      padding: 6px 12px 4px;
       border-top: 1px solid var(--ui-border);
     }
-    #repsim-top-dropdown-static > *:first-child { border-top: none; margin-top: 0; }
+    #repsim-top-dropdown-static > *:first-child { border-top: none; padding-top: 2px; }
     #repsim-top-dropdown-static .quickref-content.mobile {
-      padding: 4px 12px 12px;
+      padding: 4px 12px 6px;
     }
     #repsim-top-dropdown-static .about-mobile-inline {
       padding: 4px 12px 14px;
