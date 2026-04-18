@@ -346,8 +346,10 @@ function injectMobileStyles(): void {
     }
 
     /* Top dropdown panel */
-    /* Use a plain block layout (not flex) so vertical touch-scroll works
-       reliably inside on iOS/Android — flex + overflow sometimes conflicts. */
+    /* Outer is a fixed-positioned container that defines the viewport and
+       the visual chrome. It does NOT scroll — iOS Safari has a bug where
+       overflow-y on a fixed-positioned element silently refuses touch
+       scroll under some conditions. */
     #repsim-top-dropdown {
       display: none;
       position: fixed;
@@ -355,19 +357,27 @@ function injectMobileStyles(): void {
       left: 0;
       right: 0;
       bottom: 52px;                      /* stop above the mobile tab bar */
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;  /* smooth iOS inertial scrolling */
-      overscroll-behavior: contain;      /* don't bubble scroll to the canvas underneath */
-      touch-action: pan-y;               /* explicit: allow vertical finger-drag scroll */
       background: var(--ui-bg-solid);
       border-bottom: 1px solid var(--ui-border);
       z-index: 350;
-      padding: 10px 12px 20px;
       font-family: var(--ui-font);
       color: var(--ui-text);
     }
     #repsim-top-dropdown.open { display: block; }
-    #repsim-top-dropdown > * + * { margin-top: 10px; }
+
+    /* Inner scroll wrapper does the actual scrolling. Being a regular
+       (non-fixed) element inside a fixed container, iOS treats it as a
+       normal scroll region and touch-drag Just Works. */
+    #repsim-top-dropdown-scroll {
+      position: absolute;
+      inset: 0;
+      overflow-y: scroll;
+      -webkit-overflow-scrolling: touch; /* smooth iOS inertial scrolling */
+      overscroll-behavior: contain;      /* scroll doesn't bubble to the canvas */
+      touch-action: pan-y;               /* explicit permission for vertical drag */
+      padding: 10px 12px 20px;
+    }
+    #repsim-top-dropdown-scroll > * + * { margin-top: 10px; }
 
     .top-dropdown-row {
       display: flex;
@@ -485,15 +495,23 @@ export function setupMobileLayout(
   }
 
   // ── Top Dropdown Panel ──
+  //
+  // The scrollable area is an INNER wrapper (.top-dropdown-scroll), not the
+  // fixed-positioned outer element itself. This avoids a long-standing iOS
+  // Safari bug where position:fixed + overflow:auto/scroll silently refuses
+  // to scroll by touch (especially when html/body have overflow:hidden).
+  // The outer element is a static backdrop; the inner is the scroll viewport.
   const topDropdown = document.createElement('div');
   topDropdown.id = 'repsim-top-dropdown';
   topDropdown.className = 'repsim-ui';
+  const topDropdownScroll = document.createElement('div');
+  topDropdownScroll.id = 'repsim-top-dropdown-scroll';
+  topDropdown.appendChild(topDropdownScroll);
   document.body.appendChild(topDropdown);
 
-  // Static sections that always live inside the dropdown (not moved in/out
-  // when opening/closing). Appended here so they default to the END of the
-  // dropdown; openTopDropdown re-appends them after moved content so they
-  // stay at the bottom of the stack.
+  // Static sections that always live inside the scroll wrapper (not moved
+  // in/out when opening/closing). openTopDropdown re-appends them after the
+  // moved content so they stay at the bottom of the stack.
   const staticSections = document.createElement('div');
   staticSections.id = 'repsim-top-dropdown-static';
 
@@ -509,7 +527,7 @@ export function setupMobileLayout(
   staticSections.appendChild(aboutHeader);
   staticSections.appendChild(createAboutInline());
 
-  topDropdown.appendChild(staticSections);
+  topDropdownScroll.appendChild(staticSections);
 
   let topDropdownOpen = false;
   let topRightNodes: Node[] = [];
@@ -575,23 +593,23 @@ export function setupMobileLayout(
   }
 
   function openTopDropdown(): void {
-    // Move tool icons into dropdown first
-    if (toolIconsDiv && !topDropdown.contains(toolIconsDiv)) {
-      topDropdown.insertBefore(toolIconsDiv, staticSections);
+    // Move tool icons into the scroll wrapper first
+    if (toolIconsDiv && !topDropdownScroll.contains(toolIconsDiv)) {
+      topDropdownScroll.insertBefore(toolIconsDiv, staticSections);
     }
 
-    // Move remaining .top-right children (speed, flush/new) into dropdown
+    // Move remaining .top-right children (speed, flush/new) into scroll wrapper
     const tr = document.querySelector('#repsim-top-bar .top-right') as HTMLElement | null;
     if (tr && topRightNodes.length === 0) {
       topRightParent = tr;
       topRightNodes = Array.from(tr.children);
       for (const node of topRightNodes) {
-        topDropdown.insertBefore(node, staticSections);
+        topDropdownScroll.insertBefore(node, staticSections);
       }
     }
 
     // Keep static sections (Quick Ref + About) at the bottom of the stack
-    topDropdown.appendChild(staticSections);
+    topDropdownScroll.appendChild(staticSections);
 
     topDropdown.classList.add('open');
     moreBtn.classList.add('active');
