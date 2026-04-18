@@ -19,6 +19,9 @@ import { TUTORIAL_AUTO_DELAY_MS } from '../constants';
 interface TutorialStep {
   title: string;
   body: string;
+  /** Optional mobile-specific body — used when the desktop instructions
+   *  (e.g. mentioning middle-click) don't apply to a touch device. */
+  bodyMobile?: string;
   /** CSS selector for the target element to highlight. null = centered on screen */
   target: string | null;
   /** Mobile-viewport override — desktop-only targets (like the bottom panel) are
@@ -92,6 +95,13 @@ const STEPS: TutorialStep[] = [
     position: 'center',
   },
   {
+    title: 'Navigating the Scene',
+    body: '<b>Scroll</b> to zoom into an area. <b>Middle-click and drag</b> (or hold <b>Space + drag</b>) to pan. <b>Click</b> any segment to select an organism. Hit the crosshair <b>Center Map</b> button in the bottom-right if you get lost — it fits the whole tank back into view.',
+    bodyMobile: '<b>Pinch</b> with two fingers to zoom. <b>Drag</b> with one finger to pan the view. <b>Tap</b> any segment to select an organism. Hit the crosshair <b>Center Map</b> button in the bottom-right if you get lost — it fits the whole tank back into view.',
+    target: null,
+    position: 'center',
+  },
+  {
     title: 'Depth \u0026 Focus',
     body: 'Organisms swim at different depths \u2014 blurry ones are deeper, sharp ones are nearer. The Focus slider adjusts which depth appears sharpest, like a microscope.',
     target: '.top-focus-group',
@@ -136,14 +146,29 @@ const STEPS: TutorialStep[] = [
   },
   {
     title: 'About Repsim & Music Controls',
-    body: 'Next to the Tank Settings tab is a second panel with a short description of Repsim, credit to creator Van Sanders, and KLADG Radio with his original music. Toggle Autoplay to have a random track start on every visit. On mobile, tap the About button at the top.',
+    body: 'Another bottom tab opens a panel with a short description of Repsim, credit to creator Van Sanders, and KLADG Radio with his original music. Toggle Autoplay to have a random track start on every visit.',
+    bodyMobile: 'On mobile, tap the <b>⋯</b> (more) button at the top right of the screen. The drop-down has quick reference cards and about/music controls at the bottom.',
     target: '#repsim-about-panel',
-    targetMobile: '#repsim-about-btn',
+    targetMobile: '#repsim-mobile-more',
     position: 'above',
     positionMobile: 'below',
     onEnter: () => {
       const panel = document.getElementById('repsim-about-panel');
       const toggle = document.getElementById('repsim-about-toggle');
+      if (panel && !panel.classList.contains('expanded')) toggle?.click();
+    },
+  },
+  {
+    title: 'Quick Reference',
+    body: 'The third bottom tab pops open a cheat-sheet of every segment color plus a few core rules (reproduction, food chain, depth, infection tells). If the tutorial fades from memory, this is the first place to look.',
+    bodyMobile: 'The <b>⋯</b> drop-down at the top right also has a Quick Reference cheat-sheet: every segment color plus core rules. If the tutorial fades from memory, this is the first place to look.',
+    target: '#repsim-quickref-panel',
+    targetMobile: '#repsim-mobile-more',
+    position: 'above',
+    positionMobile: 'below',
+    onEnter: () => {
+      const panel = document.getElementById('repsim-quickref-panel');
+      const toggle = document.getElementById('repsim-quickref-toggle');
       if (panel && !panel.classList.contains('expanded')) toggle?.click();
     },
   },
@@ -346,9 +371,10 @@ export function createTutorialSystem(): TutorialSystem {
     }
     dots += '</div>';
 
+    const body = mobile && step.bodyMobile ? step.bodyMobile : step.body;
     card.innerHTML = `
       <div class="tutorial-title" style="color:${accentColor}">${step.title}</div>
-      <div class="tutorial-body">${step.body}</div>
+      <div class="tutorial-body">${body}</div>
       ${dots}
       <div class="tutorial-actions">
         <button class="tutorial-skip">Skip</button>

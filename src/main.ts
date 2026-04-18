@@ -23,7 +23,8 @@ import { createChartSystem, injectChartStyles } from './ui/charts';
 import { parseUrlParams, injectSaveShareStyles, autoSave, autoRestore, loadOrganismFromInspector } from './ui/save-share';
 import { createTutorialSystem, createTutorialButton, autoStartTutorial, injectTutorialStyles } from './ui/tutorial';
 import { createEnvironmentPanel, injectEnvironmentPanelStyles } from './ui/environment-panel';
-import { injectAboutPanelStyles, createAboutButton, createAboutPanel } from './ui/about-panel';
+import { injectAboutPanelStyles, createAboutPanel } from './ui/about-panel';
+import { createQuickRefPanel } from './ui/quick-ref';
 import { createScenarioSystem, injectScenarioStyles } from './ui/scenarios';
 import { createFieldNotes } from './ui/field-notes';
 import { setupMobileLayout } from './ui/mobile-layout';
@@ -102,11 +103,11 @@ async function main(): Promise<void> {
   injectEnvironmentPanelStyles();
   createEnvironmentPanel(engine, renderer, events, tooltips);
   createAboutPanel();
+  createQuickRefPanel();
 
-  // ── 8b2. About button in top bar (opens modal on mobile, also available on desktop) ──
-  const aboutBtn = createAboutButton();
-  const topRightForAbout = document.querySelector('.top-right');
-  if (topRightForAbout) topRightForAbout.insertBefore(aboutBtn, topRightForAbout.firstChild);
+  // Note: no top-bar About button. On desktop the About drawer is the entry
+  // point; on mobile the About content is inlined into the top dropdown
+  // (see mobile-layout.ts).
 
   // ── 8c. Mobile Layout ──
   setupMobileLayout(engine, renderer, events);

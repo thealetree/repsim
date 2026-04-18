@@ -16,6 +16,8 @@
  * https://kladg.com (no CORS needed for <audio>/<img>).
  */
 
+import { registerDrawer } from './bottom-drawers';
+
 interface KladgTrack {
   id: string;
   title: string;
@@ -74,36 +76,6 @@ export function injectAboutPanelStyles(): void {
       color: var(--ui-text);
     }
     #repsim-about-panel.expanded { height: 170px; }
-
-    /* Right-side toggle — peer of #repsim-bottom-toggle */
-    #repsim-about-toggle {
-      position: fixed;
-      bottom: 0;
-      left: calc(50% + 2px);
-      padding: 0 14px;
-      height: 22px;
-      background: var(--ui-bg);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid var(--ui-border);
-      border-bottom: none;
-      border-radius: 6px 6px 0 0;
-      cursor: pointer;
-      z-index: 96;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 9px;
-      font-weight: 600;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      white-space: nowrap;
-      color: var(--ui-text-muted);
-      font-family: var(--ui-font);
-      transition: bottom 0.25s ease;
-    }
-    #repsim-about-toggle.expanded { bottom: 170px; }
-    #repsim-about-toggle:hover { color: var(--ui-text); }
 
     .about-panel-content {
       display: flex;
@@ -353,10 +325,9 @@ export function injectAboutPanelStyles(): void {
     }
     #repsim-about-btn:hover { color: var(--ui-text); border-color: var(--ui-accent); }
 
-    /* ── Mobile: hide desktop bottom about panel + toggle ─────── */
+    /* ── Mobile: hide desktop bottom about panel (toggle hidden via shared bar) ── */
     @media (max-width: 767px) {
-      #repsim-about-panel,
-      #repsim-about-toggle { display: none !important; }
+      #repsim-about-panel { display: none !important; }
     }
   `;
   document.head.appendChild(style);
@@ -620,12 +591,6 @@ function startKladgPlayer(prefix: string): void {
  * reach About via the top-bar About button → modal.
  */
 export function createAboutPanel(): void {
-  // Toggle tab (right of center)
-  const toggle = document.createElement('div');
-  toggle.id = 'repsim-about-toggle';
-  toggle.textContent = '▲ About Repsim & Music Controls';
-  document.body.appendChild(toggle);
-
   // Panel
   const panel = document.createElement('div');
   panel.id = 'repsim-about-panel';
@@ -669,26 +634,12 @@ export function createAboutPanel(): void {
   // Start the shared player wired to these DOM ids
   startKladgPlayer('about-desk');
 
-  // Toggle logic — mutual exclusion with the Tank Settings panel
-  let expanded = false;
-  function applyExpanded(on: boolean): void {
-    expanded = on;
-    panel.classList.toggle('expanded', on);
-    toggle.classList.toggle('expanded', on);
-    toggle.textContent = on
-      ? '▼ About Repsim & Music Controls'
-      : '▲ About Repsim & Music Controls';
-  }
-  toggle.addEventListener('click', () => {
-    if (!expanded) {
-      document.dispatchEvent(new CustomEvent('repsim:close-bottom-panels', { detail: { except: 'about' } }));
-    }
-    applyExpanded(!expanded);
-  });
-  document.addEventListener('repsim:close-bottom-panels', (e) => {
-    const detail = (e as CustomEvent).detail as { except?: string } | undefined;
-    if (detail?.except === 'about') return;
-    if (expanded) applyExpanded(false);
+  // Register drawer with the shared toggle bar
+  registerDrawer({
+    id: 'about',
+    labelClosed: '▲ About Repsim & Music Controls',
+    labelOpen: '▼ About Repsim & Music Controls',
+    panel,
   });
 
   // Sync panel edges against the side panels the same way the Tank Settings
@@ -710,7 +661,24 @@ export function createAboutPanel(): void {
 }
 
 
-// ── Top-bar About button + modal (mobile + desktop fallback) ──
+// ── Mobile inline About (for the top dropdown menu) ─────────
+
+/**
+ * Build an inline About content element for mobile — used in the top
+ * dropdown menu. Returns a ready-to-insert DOM node with the kladg player
+ * wired to a unique prefix so it coexists with the desktop drawer mount.
+ */
+export function createAboutInline(): HTMLElement {
+  const el = document.createElement('div');
+  el.className = 'about-mobile-inline';
+  el.innerHTML = aboutContentHTML('about-mobile-inline');
+  // Defer player start so the DOM is attached before wiring
+  queueMicrotask(() => startKladgPlayer('about-mobile-inline'));
+  return el;
+}
+
+
+// ── Top-bar About button + modal (legacy; no longer wired) ───────
 
 let aboutModal: HTMLElement | null = null;
 

@@ -14,6 +14,8 @@
 import type { SimulationEngine } from '../simulation/engine';
 import type { Renderer } from '../rendering/renderer';
 import type { EventBus } from '../events';
+import { buildQuickRefContent } from './quick-ref';
+import { createAboutInline } from './about-panel';
 
 // ─── Breakpoint ──────────────────────────────────────────────
 
@@ -312,6 +314,37 @@ function injectMobileStyles(): void {
       #repsim-mobile-more { display: flex; }
     }
 
+    /* Static-content headers inside the top dropdown */
+    .top-dropdown-static-header {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ui-text-dim);
+      padding: 10px 12px 4px;
+      margin-top: 8px;
+      border-top: 1px solid var(--ui-border);
+    }
+    #repsim-top-dropdown-static > *:first-child { border-top: none; margin-top: 0; }
+    #repsim-top-dropdown-static .quickref-content.mobile {
+      padding: 4px 12px 12px;
+    }
+    #repsim-top-dropdown-static .about-mobile-inline {
+      padding: 4px 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #repsim-top-dropdown-static .about-mobile-inline .about-blurb {
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--ui-text);
+      max-width: none;
+    }
+    #repsim-top-dropdown-static .about-mobile-inline .about-attribution {
+      font-size: 11px;
+    }
+
     /* Top dropdown panel */
     #repsim-top-dropdown {
       display: none;
@@ -453,6 +486,27 @@ export function setupMobileLayout(
   topDropdown.className = 'repsim-ui';
   document.body.appendChild(topDropdown);
 
+  // Static sections that always live inside the dropdown (not moved in/out
+  // when opening/closing). Appended here so they default to the END of the
+  // dropdown; openTopDropdown re-appends them after moved content so they
+  // stay at the bottom of the stack.
+  const staticSections = document.createElement('div');
+  staticSections.id = 'repsim-top-dropdown-static';
+
+  const quickHeader = document.createElement('div');
+  quickHeader.className = 'top-dropdown-static-header';
+  quickHeader.textContent = 'QUICK REFERENCE';
+  staticSections.appendChild(quickHeader);
+  staticSections.appendChild(buildQuickRefContent(true));
+
+  const aboutHeader = document.createElement('div');
+  aboutHeader.className = 'top-dropdown-static-header';
+  aboutHeader.textContent = 'ABOUT REPSIM & MUSIC';
+  staticSections.appendChild(aboutHeader);
+  staticSections.appendChild(createAboutInline());
+
+  topDropdown.appendChild(staticSections);
+
   let topDropdownOpen = false;
   let topRightNodes: Node[] = [];
   let topRightParent: HTMLElement | null = null;
@@ -519,7 +573,7 @@ export function setupMobileLayout(
   function openTopDropdown(): void {
     // Move tool icons into dropdown first
     if (toolIconsDiv && !topDropdown.contains(toolIconsDiv)) {
-      topDropdown.appendChild(toolIconsDiv);
+      topDropdown.insertBefore(toolIconsDiv, staticSections);
     }
 
     // Move remaining .top-right children (speed, flush/new) into dropdown
@@ -528,9 +582,13 @@ export function setupMobileLayout(
       topRightParent = tr;
       topRightNodes = Array.from(tr.children);
       for (const node of topRightNodes) {
-        topDropdown.appendChild(node);
+        topDropdown.insertBefore(node, staticSections);
       }
     }
+
+    // Keep static sections (Quick Ref + About) at the bottom of the stack
+    topDropdown.appendChild(staticSections);
+
     topDropdown.classList.add('open');
     moreBtn.classList.add('active');
     topDropdownOpen = true;

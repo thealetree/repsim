@@ -19,6 +19,7 @@ import {
   TEMP_MIN_RADIUS, TEMP_MAX_RADIUS,
   CURRENT_MIN_RADIUS, CURRENT_MAX_RADIUS,
 } from '../constants';
+import { registerDrawer } from './bottom-drawers';
 
 
 // ─── Styles ─────────────────────────────────────────────────
@@ -49,43 +50,8 @@ export function injectEnvironmentPanelStyles(): void {
       height: 170px;
     }
 
-    /* Bottom toggles sit side-by-side at center-bottom. Tank Settings is the
-       left toggle (ends at center − 2px); About Repsim is the right toggle
-       (starts at center + 2px). Opening one closes the other — see the
-       'repsim:close-bottom-panels' custom event handlers. */
-    #repsim-bottom-toggle {
-      position: fixed;
-      bottom: 0;
-      left: calc(50% - 2px);
-      transform: translateX(-100%);
-      padding: 0 14px;
-      height: 22px;
-      background: var(--ui-bg);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid var(--ui-border);
-      border-bottom: none;
-      border-radius: 6px 6px 0 0;
-      cursor: pointer;
-      z-index: 96;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 9px;
-      font-weight: 600;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      white-space: nowrap;
-      color: var(--ui-text-muted);
-      font-family: var(--ui-font);
-      transition: bottom 0.25s ease;
-    }
-    #repsim-bottom-toggle.expanded {
-      bottom: 170px;
-    }
-    #repsim-bottom-toggle:hover {
-      color: var(--ui-text);
-    }
+    /* Toggle styles live in bottom-drawers.ts — the tank toggle is created
+       inside the shared #repsim-bottom-toggle-bar. */
 
     .bottom-panel-content {
       display: flex;
@@ -430,12 +396,6 @@ export function createEnvironmentPanel(
   // ── Floating delete badge (inline source-delete UX, no drawer needed) ──
   createSourceDeleteBadge(engine, renderer, events);
 
-  // ── Build toggle button ──
-  const toggle = document.createElement('div');
-  toggle.id = 'repsim-bottom-toggle';
-  toggle.textContent = '▲ Tank Settings';
-  document.body.appendChild(toggle);
-
   // ── Build panel ──
   const panel = document.createElement('div');
   panel.id = 'repsim-bottom-panel';
@@ -492,26 +452,13 @@ export function createEnvironmentPanel(
   `;
   document.body.appendChild(panel);
 
-  // ── Toggle expand/collapse ──
-  // When this panel opens, it tells any sibling bottom panel (About) to close
-  // via a custom event so only one occupies the bottom real estate at a time.
-  let expanded = false;
-  function applyExpanded(on: boolean): void {
-    expanded = on;
-    panel.classList.toggle('expanded', on);
-    toggle.classList.toggle('expanded', on);
-    toggle.textContent = on ? '▼ Tank Settings' : '▲ Tank Settings';
-  }
-  toggle.addEventListener('click', () => {
-    if (!expanded) {
-      document.dispatchEvent(new CustomEvent('repsim:close-bottom-panels', { detail: { except: 'tank' } }));
-    }
-    applyExpanded(!expanded);
-  });
-  document.addEventListener('repsim:close-bottom-panels', (e) => {
-    const detail = (e as CustomEvent).detail as { except?: string } | undefined;
-    if (detail?.except === 'tank') return;
-    if (expanded) applyExpanded(false);
+  // Register this drawer with the shared toggle bar. Mutual exclusion with
+  // other drawers is handled inside bottom-drawers.ts.
+  registerDrawer({
+    id: 'tank',
+    labelClosed: '▲ Tank Settings',
+    labelOpen: '▼ Tank Settings',
+    panel,
   });
 
   // ── Dynamically track side panel edges ──
