@@ -215,9 +215,13 @@ export function injectQuickRefStyles(): void {
       padding: 0;
       overflow: visible;
       gap: 12px;
+      height: auto;                  /* override desktop's height:100% so the
+                                        flex column sizes to content, not to
+                                        the scroll wrapper */
     }
     .quickref-content.mobile .quickref-cards {
       justify-content: flex-start;
+      flex: 0 0 auto;                /* don't stretch vertically */
     }
     .quickref-content.mobile .quickref-card {
       width: calc(50% - 6px);         /* two uniform cards per row on mobile */
@@ -228,6 +232,11 @@ export function injectQuickRefStyles(): void {
       padding-top: 10px;
       border-top: 1px solid var(--ui-border);
       grid-template-columns: 1fr;
+      flex: 0 0 auto;                /* THE BUG — was inheriting flex:1 1 300px
+                                        from desktop, which made the extras grid
+                                        grow to fill the column and leave a big
+                                        blank gap between the last extra and the
+                                        About section below. */
     }
 
     /* Hide the desktop bottom panel on mobile — content lives inline in the top dropdown */
