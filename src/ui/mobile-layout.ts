@@ -352,10 +352,14 @@ function injectMobileStyles(): void {
       top: 44px;
       left: 0;
       right: 0;
+      bottom: 52px;                      /* stop above the mobile tab bar */
+      overflow-y: auto;                  /* scroll when content overflows — the Quick Ref + About sections make this tall */
+      -webkit-overflow-scrolling: touch;  /* smooth iOS inertial scrolling */
+      overscroll-behavior: contain;      /* don't bubble scroll to the canvas underneath */
       background: var(--ui-bg-solid);
       border-bottom: 1px solid var(--ui-border);
       z-index: 350;
-      padding: 10px 12px;
+      padding: 10px 12px 20px;
       flex-direction: column;
       gap: 10px;
       font-family: var(--ui-font);
