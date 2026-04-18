@@ -124,14 +124,17 @@ export function injectQuickRefStyles(): void {
       overflow-y: auto;
       align-items: flex-start;
     }
+    /* Cards are uniform width (sized to fit the longest note over 3 lines)
+       and flow as a flex-wrap row. No stretching — each card stays snug. */
     .quickref-cards {
-      display: grid;
-      grid-template-columns: repeat(6, minmax(140px, 1fr));
+      display: flex;
+      flex-wrap: wrap;
       gap: 8px 12px;
-      flex: 2 1 auto;
-      min-width: 0;
+      flex: 0 1 auto;
     }
     .quickref-card {
+      flex: 0 0 auto;
+      width: 200px;
       display: grid;
       grid-template-columns: 10px 1fr;
       gap: 8px;
@@ -201,13 +204,12 @@ export function injectQuickRefStyles(): void {
       line-height: 1.35;
     }
 
-    /* Narrow desktop fallback — cards wrap to 3 columns */
+    /* Narrow desktop fallback — extras collapse to a single column */
     @media (max-width: 1200px) {
-      .quickref-cards { grid-template-columns: repeat(3, minmax(140px, 1fr)); }
       .quickref-extras { grid-template-columns: 1fr; }
     }
 
-    /* Mobile inline (inside top dropdown) — stack vertically */
+    /* Mobile inline (inside top dropdown) — stack the two sections vertically */
     .quickref-content.mobile {
       flex-direction: column;
       padding: 0;
@@ -215,7 +217,10 @@ export function injectQuickRefStyles(): void {
       gap: 12px;
     }
     .quickref-content.mobile .quickref-cards {
-      grid-template-columns: repeat(2, 1fr);
+      justify-content: flex-start;
+    }
+    .quickref-content.mobile .quickref-card {
+      width: calc(50% - 6px);         /* two uniform cards per row on mobile */
     }
     .quickref-content.mobile .quickref-extras {
       border-left: none;

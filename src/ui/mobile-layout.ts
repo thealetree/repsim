@@ -346,6 +346,8 @@ function injectMobileStyles(): void {
     }
 
     /* Top dropdown panel */
+    /* Use a plain block layout (not flex) so vertical touch-scroll works
+       reliably inside on iOS/Android — flex + overflow sometimes conflicts. */
     #repsim-top-dropdown {
       display: none;
       position: fixed;
@@ -353,21 +355,19 @@ function injectMobileStyles(): void {
       left: 0;
       right: 0;
       bottom: 52px;                      /* stop above the mobile tab bar */
-      overflow-y: auto;                  /* scroll when content overflows — the Quick Ref + About sections make this tall */
+      overflow-y: auto;
       -webkit-overflow-scrolling: touch;  /* smooth iOS inertial scrolling */
       overscroll-behavior: contain;      /* don't bubble scroll to the canvas underneath */
+      touch-action: pan-y;               /* explicit: allow vertical finger-drag scroll */
       background: var(--ui-bg-solid);
       border-bottom: 1px solid var(--ui-border);
       z-index: 350;
       padding: 10px 12px 20px;
-      flex-direction: column;
-      gap: 10px;
       font-family: var(--ui-font);
       color: var(--ui-text);
     }
-    #repsim-top-dropdown.open {
-      display: flex;
-    }
+    #repsim-top-dropdown.open { display: block; }
+    #repsim-top-dropdown > * + * { margin-top: 10px; }
 
     .top-dropdown-row {
       display: flex;
